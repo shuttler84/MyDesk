@@ -26,6 +26,7 @@ import { Toggle } from '../components/ui'
 import { BackupCenterCards } from '../components/BackupCenterCards'
 import { Puzzle } from 'lucide-react'
 import { ExtensionSection } from '../components/ExtensionSection'
+import { THEME_REGISTRY, themeSwatch } from '@shared/themes'
 import type { AppInfo, ImportPreview, ThemeName } from '@shared/types'
 import { api } from '../api/client'
 import { useApp, THEME_LABELS } from '../store/AppStore'
@@ -63,21 +64,21 @@ export function SettingsPage() {
         <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text">
           <Palette size={15} className="text-primary" /> 主题
         </h3>
-        <div className="grid grid-cols-5 gap-3">
-          {(Object.keys(THEME_LABELS) as ThemeName[]).map((t) => (
+        <div className="grid grid-cols-3 gap-3 xl:grid-cols-6">
+          {THEME_REGISTRY.map((tm) => (
             <button
-              key={t}
-              onClick={() => void patchSettings({ theme: t })}
+              key={tm.id}
+              onClick={() => void patchSettings({ theme: tm.id })}
               className={`rounded-2xl border-2 p-3 text-left transition-all ${
-                settings.theme === t ? 'border-primary shadow-soft' : 'border-border hover:border-border-strong'
+                settings.theme === tm.id ? 'border-primary shadow-soft' : 'border-border hover:border-border-strong'
               }`}
             >
               <div
                 className="mb-2 h-14 w-full rounded-xl border border-black/10"
-                style={{ background: THEME_SWATCH[t] }}
+                style={{ background: themeSwatch(tm.id) }}
               />
-              <p className="text-xs font-medium text-text">{THEME_LABELS[t]}</p>
-              {settings.theme === t && <p className="text-[10px] text-primary">使用中</p>}
+              <p className="text-xs font-medium text-text">{THEME_LABELS[tm.id]}</p>
+              {settings.theme === tm.id && <p className="text-[10px] text-primary">使用中</p>}
             </button>
           ))}
         </div>
@@ -333,12 +334,4 @@ function ExportBtn({
       {icon} {label}
     </Button>
   )
-}
-
-const THEME_SWATCH: Record<ThemeName, string> = {
-  mint: 'linear-gradient(135deg,#40916c,#d6eee3)',
-  lavender: 'linear-gradient(135deg,#7a60aa,#e7dff4)',
-  cream: 'linear-gradient(135deg,#ba7a42,#f5e3cd)',
-  midnight: 'linear-gradient(135deg,#1e2330,#60a5fa)',
-  glass: 'linear-gradient(135deg,rgba(122,168,220,.75),rgba(176,148,220,.75))'
 }

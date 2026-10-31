@@ -3,6 +3,8 @@
  * 主进程收到的任何跨进程数据都必须先通过这里，再进入业务逻辑。
  */
 import { z } from 'zod'
+import type { ThemeName } from './types'
+import { THEME_IDS } from './themes'
 
 // ---------- 基础 ----------
 
@@ -156,7 +158,7 @@ export const noteUpdateSchema = noteCreateSchema.partial().extend({ id: idSchema
 // ---------- Settings ----------
 
 export const settingsPatchSchema = z.object({
-  theme: z.enum(['mint', 'lavender', 'cream', 'midnight', 'glass']).optional(),
+  theme: z.enum(THEME_IDS as [ThemeName, ...ThemeName[]]).optional(),
   animation: z.enum(['full', 'reduced', 'off']).optional(),
   startPage: z
     .enum(['dashboard', 'tasks', 'collections', 'vault', 'files', 'notes', 'timeline', 'data', 'settings'])

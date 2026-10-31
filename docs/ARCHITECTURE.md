@@ -82,7 +82,7 @@
 
 ## 4. 渲染层主题体系
 
-五种主题 = 一组 CSS 变量（`src/renderer/src/theme/theme.css`），Tailwind 颜色全部映射到 `rgb(var(--c-*) / alpha)`。切换主题只更新 `<html data-theme>`，全局统一生效（背景/导航/卡片/按钮/输入框/弹窗/标签/图表/悬停/选中）。动画偏好写入 `data-animation`，CSS 层统一降级。
+六种主题 = 每主题一组设计令牌（`src/renderer/src/theme/theme.css`）：颜色令牌 `--c-*`（Tailwind 映射消费）+ 组件令牌 `--app-bg / --btn-primary-* / --focus-glow / --card-hover-glow / --c-card-alpha / --c-glass-blur`（由基础组件类 `.btn-primary / .field-input / .glass-card` 消费，实现各主题下主按钮渐变、聚焦光晕、卡片悬停光晕、页面多层背景的差异化表达）。主题清单/名称/预览统一注册在 `src/shared/themes.ts`（单一事实来源，新增主题 = 注册 + 一组变量）。切换主题只更新 `<html data-theme>`，全局统一生效（背景/导航/卡片/按钮/输入框/弹窗/标签/图表/悬停/选中）。动画偏好写入 `data-animation`，CSS 层统一降级并支持 `prefers-reduced-motion`。
 
 ## 5. Android 适配预留
 

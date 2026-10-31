@@ -1,25 +1,99 @@
 /**
- * 五种主题的设计令牌（CSS 变量）。
- * 所有组件只用这些令牌，保证主题切换统一作用于背景/导航/卡片/按钮/
- * 输入框/弹窗/标签/图表/悬停/选中状态。
+ * MyDesk 设计系统 — 主题变量（Design Tokens）
  *
- * 颜色为低饱和度、清新简洁方向；Glass 主题提供透明度 + 背景模糊，
- * 并通过更深的文字色保证可读性。
+ * 每个主题提供两组变量：
+ * 1. 颜色令牌（--c-*）：Tailwind 颜色映射使用。
+ * 2. 组件令牌（--app-bg / --btn-primary-* / --focus-glow / --card-hover-glow /
+ *    --c-card-alpha / --c-glass-blur）：由基础组件类（index.css）消费，
+ *    让"主按钮渐变、输入框聚焦光晕、卡片悬停光晕、页面背景"在不同主题下
+ *    有各自的表达（浅色主题为纯色/柔和阴影，Holographic 为虹彩渐变/棱镜光晕）。
+ *
+ * 新增主题：复制任意一组变量块，调整数值，并在 src/shared/themes.ts 注册。
  */
 
+/* ============ Holographic · 全息数字工作台（默认主题） ============ */
+:root[data-theme='holographic'] {
+  --c-page: 10 10 31;            /* #0A0A1F 深空黑紫 */
+  --c-surface: 24 18 44;         /* 导航/顶栏 半透明暗紫 */
+  --c-surface-2: 20 15 38;
+  --c-surface-3: 38 30 64;
+  --c-card: 30 24 52;            /* 卡片 半透明暗色 */
+  --c-border: 84 74 132;
+  --c-border-strong: 116 104 172;
+  --c-text: 238 236 250;
+  --c-text-2: 182 178 204;
+  --c-text-3: 132 128 158;
+  --c-primary: 168 85 247;       /* #A855F7 紫 */
+  --c-primary-soft: 56 40 96;
+  --c-on-primary: 255 255 255;
+  --c-accent: 0 212 255;         /* #00D4FF 青 */
+  --c-danger: 255 90 130;
+  --c-success: 60 220 150;
+  --c-warning: 255 200 90;
+  --c-glass-blur: 14px;
+  --c-card-alpha: 0.62;
+
+  /* 组件令牌 */
+  --app-bg:
+    radial-gradient(1100px 700px at 8% -10%, rgba(168, 85, 247, 0.22), transparent 60%),
+    radial-gradient(900px 600px at 96% 4%, rgba(99, 102, 241, 0.18), transparent 55%),
+    radial-gradient(700px 500px at 70% 108%, rgba(0, 212, 255, 0.10), transparent 55%),
+    radial-gradient(600px 420px at 12% 86%, rgba(255, 0, 128, 0.08), transparent 60%),
+    linear-gradient(160deg, #0a0a1f 0%, #120b26 55%, #1a0b2e 100%);
+  --btn-primary-bg: linear-gradient(120deg, #ff0080, #6366f1 35%, #a855f7 62%, #00d4ff);
+  --btn-primary-bg-size: 220% 100%;
+  --btn-primary-hover-glow: 0 6px 24px -6px rgba(168, 85, 247, 0.55), 0 0 18px -4px rgba(0, 212, 255, 0.35);
+  --btn-primary-hover-y: -1px;
+  --focus-glow: 0 0 0 3px rgba(168, 85, 247, 0.28);
+  --card-hover-glow: 0 10px 32px -8px rgba(168, 85, 247, 0.30), 0 0 24px -10px rgba(0, 212, 255, 0.25);
+  --card-border-hover: 116 104 172;
+}
+
+/* Holographic 深空背景光斑：缓慢漂移（禁用动画/减少动画时静止） */
+:root[data-theme='holographic'] body::before,
+:root[data-theme='holographic'] body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(60px);
+}
+:root[data-theme='holographic'] body::before {
+  width: 520px;
+  height: 520px;
+  left: -140px;
+  top: -160px;
+  background: radial-gradient(circle, rgba(168, 85, 247, 0.20), transparent 65%);
+  animation: holo-drift 46s ease-in-out infinite alternate;
+}
+:root[data-theme='holographic'] body::after {
+  width: 460px;
+  height: 460px;
+  right: -140px;
+  bottom: -140px;
+  background: radial-gradient(circle, rgba(0, 212, 255, 0.14), transparent 65%);
+  animation: holo-drift 58s ease-in-out infinite alternate-reverse;
+}
+@keyframes holo-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(120px, 70px, 0) scale(1.15); }
+}
+
+/* ============ Mint · 薄荷绿 ============ */
 :root,
 :root[data-theme='mint'] {
-  --c-page: 242 248 246;          /* 页面背景 */
-  --c-surface: 255 255 255;       /* 导航栏/顶部栏 */
+  --c-page: 242 248 246;
+  --c-surface: 255 255 255;
   --c-surface-2: 246 250 249;
   --c-surface-3: 233 242 238;
-  --c-card: 255 255 255;          /* 卡片 */
+  --c-card: 255 255 255;
   --c-border: 224 234 229;
   --c-border-strong: 206 221 214;
   --c-text: 38 50 46;
   --c-text-2: 90 104 98;
   --c-text-3: 140 152 146;
-  --c-primary: 64 145 108;        /* 薄荷绿 */
+  --c-primary: 64 145 108;
   --c-primary-soft: 214 238 227;
   --c-on-primary: 255 255 255;
   --c-accent: 58 122 168;
@@ -29,8 +103,18 @@
   --c-glass-blur: 0px;
   --c-card-alpha: 1;
   --c-shadow-strength: 0.08;
+
+  --app-bg: rgb(var(--c-page));
+  --btn-primary-bg: rgb(var(--c-primary));
+  --btn-primary-bg-size: auto;
+  --btn-primary-hover-glow: none;
+  --btn-primary-hover-y: 0px;
+  --focus-glow: 0 0 0 3px rgb(var(--c-primary) / 0.18);
+  --card-hover-glow: none;
+  --card-border-hover: var(--c-border-strong);
 }
 
+/* ============ Lavender · 薰衣草 ============ */
 :root[data-theme='lavender'] {
   --c-page: 246 243 250;
   --c-surface: 255 255 255;
@@ -42,7 +126,7 @@
   --c-text: 48 42 58;
   --c-text-2: 98 90 112;
   --c-text-3: 148 140 160;
-  --c-primary: 122 96 170;        /* 薰衣草紫 */
+  --c-primary: 122 96 170;
   --c-primary-soft: 231 223 244;
   --c-on-primary: 255 255 255;
   --c-accent: 168 96 150;
@@ -52,8 +136,18 @@
   --c-glass-blur: 0px;
   --c-card-alpha: 1;
   --c-shadow-strength: 0.08;
+
+  --app-bg: rgb(var(--c-page));
+  --btn-primary-bg: rgb(var(--c-primary));
+  --btn-primary-bg-size: auto;
+  --btn-primary-hover-glow: none;
+  --btn-primary-hover-y: 0px;
+  --focus-glow: 0 0 0 3px rgb(var(--c-primary) / 0.18);
+  --card-hover-glow: none;
+  --card-border-hover: var(--c-border-strong);
 }
 
+/* ============ Cream · 奶油白 ============ */
 :root[data-theme='cream'] {
   --c-page: 250 246 239;
   --c-surface: 255 253 249;
@@ -65,7 +159,7 @@
   --c-text: 62 54 42;
   --c-text-2: 110 99 82;
   --c-text-3: 158 147 128;
-  --c-primary: 186 122 66;        /* 暖奶油棕 */
+  --c-primary: 186 122 66;
   --c-primary-soft: 245 227 205;
   --c-on-primary: 255 255 255;
   --c-accent: 128 132 88;
@@ -75,8 +169,18 @@
   --c-glass-blur: 0px;
   --c-card-alpha: 1;
   --c-shadow-strength: 0.07;
+
+  --app-bg: rgb(var(--c-page));
+  --btn-primary-bg: rgb(var(--c-primary));
+  --btn-primary-bg-size: auto;
+  --btn-primary-hover-glow: none;
+  --btn-primary-hover-y: 0px;
+  --focus-glow: 0 0 0 3px rgb(var(--c-primary) / 0.18);
+  --card-hover-glow: none;
+  --card-border-hover: var(--c-border-strong);
 }
 
+/* ============ Midnight · 深空暗色 ============ */
 :root[data-theme='midnight'] {
   --c-page: 22 26 34;
   --c-surface: 30 35 45;
@@ -88,7 +192,7 @@
   --c-text: 226 231 238;
   --c-text-2: 160 170 184;
   --c-text-3: 116 126 142;
-  --c-primary: 96 165 250;        /* 深空蓝 */
+  --c-primary: 96 165 250;
   --c-primary-soft: 40 58 84;
   --c-on-primary: 240 247 255;
   --c-accent: 149 130 220;
@@ -98,14 +202,24 @@
   --c-glass-blur: 0px;
   --c-card-alpha: 1;
   --c-shadow-strength: 0.3;
+
+  --app-bg: rgb(var(--c-page));
+  --btn-primary-bg: rgb(var(--c-primary));
+  --btn-primary-bg-size: auto;
+  --btn-primary-hover-glow: 0 6px 20px -6px rgb(var(--c-primary) / 0.5);
+  --btn-primary-hover-y: -1px;
+  --focus-glow: 0 0 0 3px rgb(var(--c-primary) / 0.3);
+  --card-hover-glow: 0 10px 28px -10px rgb(0 0 0 / 0.5);
+  --card-border-hover: var(--c-border-strong);
 }
 
+/* ============ Glass · 透明玻璃 ============ */
 :root[data-theme='glass'] {
   --c-page: 233 240 246;
   --c-surface: 255 255 255;
   --c-surface-2: 250 252 254;
   --c-surface-3: 240 245 250;
-  --c-card: 255 255 255;          /* 卡片实际以 alpha + blur 渲染 */
+  --c-card: 255 255 255;
   --c-border: 210 222 232;
   --c-border-strong: 186 200 214;
   --c-text: 34 44 54;
@@ -121,13 +235,17 @@
   --c-glass-blur: 22px;
   --c-card-alpha: 0.62;
   --c-shadow-strength: 0.1;
-}
 
-/* Glass 主题的页面背景：柔和的蓝紫渐变，供毛玻璃卡片映衬 */
-:root[data-theme='glass'] body {
-  background:
+  --app-bg:
     radial-gradient(1100px 700px at 12% -8%, rgba(122, 168, 220, 0.4), transparent 60%),
     radial-gradient(900px 600px at 95% 8%, rgba(176, 148, 220, 0.32), transparent 55%),
     radial-gradient(800px 800px at 50% 110%, rgba(120, 200, 190, 0.3), transparent 60%),
     rgb(var(--c-page));
+  --btn-primary-bg: rgb(var(--c-primary));
+  --btn-primary-bg-size: auto;
+  --btn-primary-hover-glow: none;
+  --btn-primary-hover-y: 0px;
+  --focus-glow: 0 0 0 3px rgb(var(--c-primary) / 0.22);
+  --card-hover-glow: none;
+  --card-border-hover: var(--c-border-strong);
 }

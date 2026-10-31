@@ -5,7 +5,7 @@ import type { DB } from '@database/connection'
 import type { AppSettings, AnimationPref, ThemeName, PageId, TrayCloseBehavior, AutoBackupFrequency } from '@shared/types'
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: 'mint',
+  theme: 'holographic',
   animation: 'full',
   startPage: 'dashboard',
   vaultAutoLockMinutes: 10,

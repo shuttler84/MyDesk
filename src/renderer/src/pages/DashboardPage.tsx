@@ -74,7 +74,7 @@ export function DashboardPage() {
         <div className="w-72">
           <div className="mb-1.5 flex items-baseline justify-between">
             <span className="text-xs text-text-2">今日任务</span>
-            <span className="font-mono text-sm font-semibold text-text">
+            <span className="holo-text font-mono text-sm font-semibold">
               {stats.tasksDone}/{stats.tasksTotal}
             </span>
           </div>
@@ -267,7 +267,7 @@ function StatCard({
         {icon}
       </div>
       <div>
-        <p className="text-xl font-bold text-text">{value}</p>
+        <p className="holo-text text-xl font-bold">{value}</p>
         <p className="text-xs text-text-3">{label}</p>
       </div>
     </motion.div>

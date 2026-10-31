@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./src/renderer/**/*.{ts,tsx,html}'],
-  darkMode: ['class', '[data-theme="midnight"]'],
+  darkMode: ['class', '[data-theme="midnight"], [data-theme="holographic"]'],
   theme: {
     extend: {
       colors: {

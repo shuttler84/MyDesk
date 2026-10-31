@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Search, Plus, Bell, Palette, Database, CornerDownLeft, History, Trash2 } from 'lucide-react'
 import type { GlobalSearchResult, NotificationItem, ThemeName } from '@shared/types'
 import { useApp, THEME_LABELS } from '../store/AppStore'
+import { THEME_REGISTRY, themeSwatch } from '@shared/themes'
 import { api } from '../api/client'
 import { Input, Tag } from '../components/ui'
 
@@ -341,21 +342,21 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
               exit={{ opacity: 0, y: 4 }}
               className="glass-card absolute right-0 top-11 z-40 w-44 rounded-xl border border-border p-1.5 shadow-lifted"
             >
-              {(Object.keys(THEME_LABELS) as ThemeName[]).map((t) => (
+              {THEME_REGISTRY.map((tm) => (
                 <button
-                  key={t}
-                  onClick={() => void applyTheme(t)}
+                  key={tm.id}
+                  onClick={() => void applyTheme(tm.id)}
                   className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
-                    settings?.theme === t
+                    settings?.theme === tm.id
                       ? 'bg-primary-soft font-medium text-primary'
                       : 'text-text-2 hover:bg-surface-2'
                   }`}
                 >
                   <span
                     className="h-4 w-4 rounded-full border border-black/10"
-                    style={{ background: THEME_SWATCH[t] }}
+                    style={{ background: themeSwatch(tm.id) }}
                   />
-                  {THEME_LABELS[t]}
+                  {THEME_LABELS[tm.id]}
                 </button>
               ))}
             </motion.div>
@@ -373,12 +374,4 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
       </div>
     </header>
   )
-}
-
-const THEME_SWATCH: Record<ThemeName, string> = {
-  mint: 'linear-gradient(135deg,#40916c,#d6eee3)',
-  lavender: 'linear-gradient(135deg,#7a60aa,#e7dff4)',
-  cream: 'linear-gradient(135deg,#ba7a42,#f5e3cd)',
-  midnight: 'linear-gradient(135deg,#1e2330,#60a5fa)',
-  glass: 'linear-gradient(135deg,rgba(122,168,220,.75),rgba(176,148,220,.75))'
 }

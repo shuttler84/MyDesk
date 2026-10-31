@@ -19,6 +19,7 @@ const PAGES = [
 ]
 
 const THEMES: Array<{ id: string; label: string }> = [
+  { id: 'holographic', label: '全息' },
   { id: 'mint', label: '薄荷绿' },
   { id: 'lavender', label: '薰衣草' },
   { id: 'cream', label: '奶油白' },
@@ -121,7 +122,7 @@ export async function runUiTour(win: BrowserWindow): Promise<void> {
   await sleep(600)
   await win.webContents.executeJavaScript(`
     (() => {
-      const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('薄荷绿'))
+      const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('全息'))
       if (b) b.click()
     })()
   `)

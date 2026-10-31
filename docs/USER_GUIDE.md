@@ -12,7 +12,8 @@
 
 ## 3. 主题与动画
 
-- 顶栏调色板图标或 Settings 页可切换 **Mint / Lavender / Cream / Midnight / Glass** 五种主题，选择自动保存。
+- 顶栏调色板图标或设置页可切换 **Holographic（全息）**、薄荷绿、薰衣草、奶油白、深空暗色、透明玻璃**六种主题**，选择自动保存。
+- Holographic 为新安装的默认主题：深空黑紫背景 + 虹彩渐变按钮 + 玻璃卡片 + 缓慢漂移光斑；原有五主题随时可切回。
 - Glass 主题使用透明玻璃效果，所有文字保持可读。
 - Settings → Animation：Full（全部动画）/ Reduced（减少动画）/ Off（关闭动画）。
 

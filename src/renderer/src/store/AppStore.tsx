@@ -14,6 +14,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { CheckCircle2, XCircle, Info } from 'lucide-react'
 import type { AppSettings, PageId, ThemeName } from '@shared/types'
 import { api } from '../api/client'
+import { THEME_REGISTRY } from '@shared/themes'
 
 export interface Toast {
   id: number
@@ -115,10 +116,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-export const THEME_LABELS: Record<ThemeName, string> = {
-  mint: '薄荷绿',
-  lavender: '薰衣草',
-  cream: '奶油白',
-  midnight: '深空暗色',
-  glass: '透明玻璃'
-}
+export const THEME_LABELS: Record<ThemeName, string> = Object.fromEntries(
+  THEME_REGISTRY.map((t) => [t.id, t.label])
+) as Record<ThemeName, string>

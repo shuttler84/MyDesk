@@ -9,8 +9,56 @@ body,
 }
 
 body {
-  @apply bg-page text-text font-sans antialiased;
+  background: var(--app-bg);
+  @apply text-text font-sans antialiased;
   overflow: hidden;
+  transition: background 0.45s ease;
+}
+
+/* ---------- Design System 组件类（全部由主题令牌驱动） ---------- */
+
+/* 主按钮：Holographic 为多色渐变 + 悬停光谱流动；其他主题为纯色 */
+.btn-primary {
+  background: var(--btn-primary-bg);
+  background-size: var(--btn-primary-bg-size);
+  background-position: 0% 0%;
+  transition: background-position 0.45s ease, box-shadow 0.25s ease, transform 0.15s ease, filter 0.2s ease;
+}
+.btn-primary:hover:not(:disabled) {
+  background-position: 100% 0%;
+  box-shadow: var(--btn-primary-hover-glow);
+  transform: translateY(var(--btn-primary-hover-y));
+}
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.97);
+  transform: translateY(0) scale(0.97);
+}
+
+/* 输入框聚焦光晕（颜色/强度随主题） */
+.field-input:focus {
+  border-color: rgb(var(--c-primary));
+  box-shadow: var(--focus-glow);
+}
+
+/* 卡片悬停光晕（Holographic 棱镜光晕，其他主题柔和阴影/无） */
+.glass-card {
+  transition: box-shadow 0.25s ease, border-color 0.25s ease, background 0.45s ease;
+}
+.glass-card:hover {
+  box-shadow: var(--card-hover-glow), 0 2px 12px -2px rgb(0 0 0 / calc(var(--c-shadow-strength, 0.08) * 1));
+  border-color: rgb(var(--card-border-hover));
+}
+
+/* 渐变强调文字（仅 Holographic 呈现虹彩渐变，其他主题为 primary 色） */
+.holo-text {
+  color: rgb(var(--c-primary));
+}
+:root[data-theme='holographic'] .holo-text {
+  background: linear-gradient(120deg, #ff0080, #a855f7 40%, #00d4ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 
 /* ---------- 通用组件类（主题令牌驱动） ---------- */
@@ -18,7 +66,8 @@ body {
 .glass-card {
   background-color: rgb(var(--c-card) / var(--c-card-alpha, 1));
 }
-:root[data-theme='glass'] .glass-card {
+:root[data-theme='glass'] .glass-card,
+:root[data-theme='holographic'] .glass-card {
   backdrop-filter: blur(var(--c-glass-blur)) saturate(1.4);
   -webkit-backdrop-filter: blur(var(--c-glass-blur)) saturate(1.4);
   border-color: rgb(var(--c-border) / 0.7);
@@ -64,6 +113,16 @@ body {
   background-clip: content-box;
 }
 *::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 
 /* 减少动画 / 关闭动画 */
 :root[data-animation='reduced'] *,

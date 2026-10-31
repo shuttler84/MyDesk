@@ -53,7 +53,7 @@ export function Button({
   const base =
     'inline-flex select-none items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition-all duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50'
   const styles: Record<ButtonVariant, string> = {
-    primary: 'bg-primary text-on-primary shadow-soft hover:brightness-110',
+    primary: 'btn-primary text-on-primary shadow-soft',
     secondary:
       'border border-border bg-surface-2 text-text hover:bg-surface-3 hover:border-border-strong',
     ghost: 'text-text-2 hover:bg-surface-3 hover:text-text',
@@ -111,7 +111,7 @@ export const Input = React.forwardRef(function Input(
       onFocus={onFocus}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className={`w-full rounded-xl border border-border bg-surface-2 px-3.5 py-2 text-sm text-text placeholder:text-text-3 outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 ${
+      className={`field-input w-full rounded-xl border border-border bg-surface-2 px-3.5 py-2 text-sm text-text placeholder:text-text-3 outline-none transition-colors ${
         mono ? 'font-mono' : ''
       } ${className}`}
     />

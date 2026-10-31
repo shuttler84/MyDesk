@@ -15,7 +15,11 @@ export const PRIORITIES: Priority[] = ['low', 'medium', 'high']
 
 // ---------- Settings ----------
 
-export type ThemeName = 'mint' | 'lavender' | 'cream' | 'midnight' | 'glass'
+/**
+ * 主题标识。新增主题：在此联合中加入 id + 在 src/shared/themes.ts 注册表
+ * 与 theme.css 中各加一组变量（编译期会因注册表 satisfies 校验而提醒）。
+ */
+export type ThemeName = 'holographic' | 'mint' | 'lavender' | 'cream' | 'midnight' | 'glass'
 
 export const THEMES: ThemeName[] = ['mint', 'lavender', 'cream', 'midnight', 'glass']
 
