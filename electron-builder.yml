@@ -1,0 +1,35 @@
+# MyDesk 打包配置
+appId: com.mydesk.app
+productName: MyDesk
+copyright: Copyright © 2026 MyDesk
+
+directories:
+  buildResources: build
+  output: releases
+
+files:
+  - out/**
+  - package.json
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.png
+  artifactName: ${productName}-${version}-${arch}-Setup.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: MyDesk
+  artifactName: ${productName}-${version}-Setup.${ext}
+
+portable:
+  artifactName: ${productName}-${version}-Portable.${ext}

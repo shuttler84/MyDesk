@@ -1,0 +1,51 @@
+{
+  "name": "mydesk",
+  "version": "1.0.1",
+  "description": "MyDesk — Your Personal Digital Space. A local-first personal digital hub.",
+  "main": "out/main/index.js",
+  "author": "MyDesk",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dist": "electron-vite build && electron-builder --win"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "hash-wasm": "^4.12.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
+    "@types/node": "^24.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "framer-motion": "^11.15.0",
+    "lucide-react": "^0.468.0",
+    "pngjs": "^7.0.0",
+    "postcss": "^8.4.49",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.7"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "electron@45.2.1": true,
+    "electron-winstaller@5.4.0": true
+  }
+}

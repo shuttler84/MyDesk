@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-page text-text font-sans antialiased;
+  overflow: hidden;
+}
+
+/* ---------- 通用组件类（主题令牌驱动） ---------- */
+
+.glass-card {
+  background-color: rgb(var(--c-card) / var(--c-card-alpha, 1));
+}
+:root[data-theme='glass'] .glass-card {
+  backdrop-filter: blur(var(--c-glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--c-glass-blur)) saturate(1.4);
+  border-color: rgb(var(--c-border) / 0.7);
+}
+
+.md-body {
+  @apply text-[15px] leading-7 text-text-2;
+}
+.md-body h1,
+.md-body h2,
+.md-body h3 {
+  @apply font-semibold text-text mt-5 mb-2;
+}
+.md-body h1 { @apply text-xl; }
+.md-body h2 { @apply text-lg; }
+.md-body h3 { @apply text-base; }
+.md-body p { @apply my-2; }
+.md-body ul { @apply list-disc pl-6 my-2; }
+.md-body ol { @apply list-decimal pl-6 my-2; }
+.md-body a { @apply text-primary underline underline-offset-2; }
+.md-body code {
+  @apply font-mono text-[13px] px-1.5 py-0.5 rounded bg-surface-3 text-text;
+}
+.md-body pre {
+  @apply font-mono text-[13px] leading-6 p-4 rounded-xl bg-surface-2 border border-border overflow-x-auto my-3;
+}
+.md-body pre code { @apply bg-transparent p-0; }
+.md-body blockquote {
+  @apply border-l-4 border-primary-soft pl-4 my-3 text-text-2 italic;
+}
+.md-body table { @apply w-full my-3 border-collapse; }
+.md-body th,
+.md-body td { @apply border border-border px-3 py-1.5 text-left; }
+.md-body img { @apply rounded-xl max-w-full my-2; }
+.md-body hr { @apply border-border my-4; }
+
+/* 滚动条 */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: rgb(var(--c-border-strong));
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* 减少动画 / 关闭动画 */
+:root[data-animation='reduced'] *,
+:root[data-animation='off'] * {
+  animation-duration: 0.01ms !important;
+  transition-duration: 0.01ms !important;
+}
+:root[data-animation='off'] * {
+  animation: none !important;
+}
