@@ -127,6 +127,25 @@ export async function fetchUrlMeta(rawUrl: string): Promise<UrlMeta> {
     return meta
   }
 
+  // GitHub 仓库识别：调用 GitHub 公共 API 获取仓库简介（仅作为数据使用）
+  const gh = rawUrl.match(/^https?:\/\/(www\.)?github\.com\/([A-Za-z0-9-_.]+)\/([A-Za-z0-9-_.]+)\/?/i)
+  if (gh) {
+    try {
+      const api = await fetch(`https://api.github.com/repos/${gh[2]}/${gh[3].replace(/\.git$/, '')}`, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'MyDesk/1.1', Accept: 'application/vnd.github+json' }
+      })
+      if (api.ok) {
+        const repo = (await api.json()) as { full_name?: string; description?: string; html_url?: string }
+        if (repo.full_name) meta.title = repo.full_name
+        if (repo.description) meta.description = repo.description
+      }
+      // API 失败不影响普通网页解析结果
+    } catch {
+      // 忽略：GitHub API 不可达时退回网页解析
+    }
+  }
+
   // ---- 以下全部是纯文本解析，内容仅作为数据使用 ----
   const titleFromTag = html.match(/<title[^>]*>([^<]{0,500})<\/title>/i)?.[1]
   meta.title =

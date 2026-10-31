@@ -190,3 +190,39 @@ export function exportData(
     }
   }
 }
+
+// ---------- 按选中 ID 导出（阶段二） ----------
+
+/** 导出选中的收藏为 CSV（保持传入 ID 顺序） */
+export function buildCollectionsCsvByIds(db: DB, ids: string[]): string {
+  const get = db.prepare(`SELECT * FROM collections WHERE id = ?`)
+  const cols: Collection[] = []
+  for (const id of ids) {
+    const row = get.get(id) as CollectionRow | undefined
+    if (row) cols.push(rowToCollection(row))
+  }
+  return toCsv(
+    ['id', 'name', 'url', 'type', 'description', 'note', 'tags', 'importance', 'researchStatus', 'createdAt', 'updatedAt'],
+    cols.map((c) => [
+      c.id, c.name, c.url, c.type, c.description, c.note, c.tags.join(';'),
+      c.importance, c.researchStatus, c.createdAt, c.updatedAt
+    ])
+  )
+}
+
+/** 导出选中的文件索引为 CSV（保持传入 ID 顺序） */
+export function buildFilesCsvByIds(db: DB, ids: string[]): string {
+  const get = db.prepare(`SELECT * FROM file_index WHERE id = ?`)
+  const files: FileIndexItem[] = []
+  for (const id of ids) {
+    const row = get.get(id) as FileRow | undefined
+    if (row) files.push(rowToItem(row))
+  }
+  return toCsv(
+    ['id', 'name', 'path', 'fileType', 'size', 'version', 'tags', 'isInvalid', 'lastCheckedAt', 'notes', 'createdAt'],
+    files.map((f) => [
+      f.id, f.name, f.path, f.fileType, f.size ?? '', f.version, f.tags.join(';'),
+      f.isInvalid ? 'yes' : 'no', f.lastCheckedAt ?? '', f.notes, f.createdAt
+    ])
+  )
+}

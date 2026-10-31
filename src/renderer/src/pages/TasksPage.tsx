@@ -273,6 +273,11 @@ function TaskRow({
               {task.title}
             </span>
             {task.isImportant && <Star size={13} className="shrink-0 fill-warning text-warning" />}
+            {task.reminderMinutes !== null && (
+              <span title="已设置提醒" className="shrink-0 text-[10px] text-accent">
+                ⏰
+              </span>
+            )}
             {overdue && <Tag className="!bg-danger/10 !text-danger">已逾期</Tag>}
             {dueToday && <Tag>今天</Tag>}
           </div>
@@ -427,6 +432,22 @@ function TaskEditorModal({
           />
         </Field>
       </div>
+      <Field label="提醒">
+        <Select
+          value={String(form.reminderMinutes ?? 'default')}
+          onChange={(v) => setForm((f) => ({ ...f, reminderMinutes: v === 'default' ? null : Number(v) }))}
+          options={[
+            { value: 'default', label: '跟随默认设置' },
+            { value: '0', label: '到期时' },
+            { value: '5', label: '提前 5 分钟' },
+            { value: '15', label: '提前 15 分钟' },
+            { value: '30', label: '提前 30 分钟' },
+            { value: '60', label: '提前 1 小时' },
+            { value: '120', label: '提前 2 小时' },
+            { value: '1440', label: '提前 1 天' }
+          ]}
+        />
+      </Field>
       <Field label="备注">
         <Textarea
           value={form.notes ?? ''}

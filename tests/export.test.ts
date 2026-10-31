@@ -12,6 +12,7 @@ import * as collections from '@main/services/collectionService'
 import * as notes from '@main/services/noteService'
 import * as vault from '@main/services/vaultService'
 import { exportData, buildJsonExport } from '@main/services/exportService'
+import { LATEST_SCHEMA_VERSION } from '@database/migrations'
 
 function tempDir(): string {
   const d = mkdtempSync(join(tmpdir(), 'mydesk-export-'))
@@ -96,7 +97,7 @@ describe('export', () => {
     const j = buildJsonExport(db, '9.9.9')
     expect(j.kind).toBe('full-json-export')
     expect(j.appVersion).toBe('9.9.9')
-    expect(j.schemaVersion).toBe(1)
+    expect(j.schemaVersion).toBe(LATEST_SCHEMA_VERSION)
     db.close()
   })
 })

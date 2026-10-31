@@ -64,6 +64,7 @@
 | --- | --- |
 | `src/main/index.ts` | 应用生命周期、窗口、安全策略、迁移触发 |
 | `src/main/ipc.ts` | 全部 IPC 注册（通道 → zod → 服务函数） |
+| `src/main/services/backupService.ts` | .mydeskpack 导出/导入 + 备份中心（历史/校验/自动备份） |
 | `src/main/vaultManager.ts` | 保险箱会话、自动锁定、剪贴板清理 |
 | `src/main/services/*` | 任务/收藏/文件索引/笔记/设置/时间轴/Dashboard/搜索/备份/导出/元数据抓取 |
 | `src/main/platform/*` | `PlatformAdapter` 接口 + Electron 实现 |
@@ -71,6 +72,12 @@
 | `src/shared/*` | 类型、IPC 常量、zod 校验、时间工具 |
 | `src/preload/index.ts` | contextBridge 桥（白名单） |
 | `src/renderer/*` | React UI：主题（CSS 变量 × 5）、布局、通用组件、8 页面 |
+| `main/notificationCenter.ts` | 统一通知中心（内存态 + 推送 + 系统通知） |
+| `main/tray.ts` | 系统托盘（菜单/图标/关闭行为联动） |
+| `main/quickAdd.ts` | 全局快速添加窗口 + Ctrl+Shift+Space |
+| `main/reminderScheduler.ts` | 任务到期提醒调度（20s 周期，reminder_log 去重） |
+| `main/e2eProbe.ts` / `e2eProbe2.ts` / `uiTour.ts` | 验收辅助（环境变量触发） |
+| `shared/quickAdd.ts` / `reminder.ts` | 平台无关的快速添加识别器与提醒核心 |
 | `tests/*` | Vitest 测试（helpers 提供平台桩） |
 
 ## 4. 渲染层主题体系

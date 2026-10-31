@@ -5,6 +5,7 @@
 - **Schema Version** 存储于 SQLite `PRAGMA user_version`，与软件版本号完全独立。
 - 当前版本链：
   - `001_initial_schema`：v0 → v1（MyDesk 1.0.0 初始结构）
+  - `002_task_reminders`：v1 → v2（MyDesk 1.1.0，任务提醒：tasks.reminder_minutes 列 + reminder_log 表，纯新增）
 - 迁移脚本权威实现：`src/database/migrations/`；SQL 存档：`migrations/`（人工比对用）。
 - 历史记录表 `migration_history`：migration_id、from_version、to_version、description、script_hash、executed_at、success。
 
@@ -40,7 +41,7 @@
 | 表 | 说明 | 关键约束/索引 |
 | --- | --- | --- |
 | `migration_history` | 迁移历史 | migration_id UNIQUE |
-| `tasks` | 任务 | priority CHECK；idx(completed,due_date)、idx(sort_order) |
+| `tasks` | 任务 | priority CHECK；idx(completed,due_date)、idx(sort_order)；V2 新增 reminder_minutes（null=默认策略，0=到期时，N=提前 N 分钟） |
 | `collections` | 收藏 | type/research_status CHECK；idx(type)、idx(created_at) |
 | `file_index` | 文件索引 | idx(created_at) |
 | `notes` | 笔记 | idx(updated_at) |
@@ -48,5 +49,6 @@
 | `vault_store` | 保险箱加密容器 | 单行(id=1)；data=nonce‖密文‖tag；**无明文** |
 | `settings` | 键值设置 | key PK |
 | `activity_log` | 活动记录 | idx(created_at) |
+| `reminder_log` | 任务提醒去重记录（V2） | task_id FK → tasks ON DELETE CASCADE；idx(task_id) |
 
 ID 一律为 UUID 字符串（除 activity_log 自增与 vault_store 固定单行）；时间一律 UTC ISO 8601 字符串；标签字段存 JSON 数组文本。

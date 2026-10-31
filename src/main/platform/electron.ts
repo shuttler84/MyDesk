@@ -57,6 +57,16 @@ export function createElectronPlatform(): PlatformAdapter {
       return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0]
     },
 
+    async pickFiles(options) {
+      const win = BrowserWindow.getFocusedWindow() ?? undefined
+      const result = await dialog.showOpenDialog(win as BrowserWindow, {
+        title: options.title ?? '选择文件',
+        properties: ['openFile', 'multiSelections'],
+        filters: options.filters
+      })
+      return result.canceled ? [] : result.filePaths
+    },
+
     async pickSaveFile(options) {
       const win = BrowserWindow.getFocusedWindow() ?? undefined
       const result = await dialog.showSaveDialog(win as BrowserWindow, {

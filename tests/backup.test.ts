@@ -16,6 +16,7 @@ import * as files from '@main/services/fileIndexService'
 import * as vault from '@main/services/vaultService'
 import { exportBackup, importPreview, importBackup } from '@main/services/backupService'
 import { getUserVersion } from '@database/connection'
+import { LATEST_SCHEMA_VERSION } from '@database/migrations'
 
 function tempDir(): string {
   const d = mkdtempSync(join(tmpdir(), 'mydesk-backup-'))
@@ -55,7 +56,7 @@ describe('backup .mydeskpack', () => {
     const manifest = JSON.parse(zip.getEntry('manifest.json')!.getData().toString('utf8'))
     expect(manifest.app).toBe('MyDesk')
     expect(manifest.formatVersion).toBe(1)
-    expect(manifest.schemaVersion).toBe(1)
+    expect(manifest.schemaVersion).toBe(LATEST_SCHEMA_VERSION)
     expect(manifest.includesVault).toBe(true)
     expect(Object.keys(manifest.files)).toContain('data/database.sqlite')
 

@@ -24,12 +24,34 @@ import * as searchService from './services/searchService'
 import * as backupService from './services/backupService'
 import * as exportService from './services/exportService'
 import { fetchUrlMeta } from './services/metaFetchService'
+import { deleteManyCollections, setManyTags, getByIds } from './services/collectionService'
+import { createManyFileIndex, getFileByIds } from './services/fileIndexService'
+import { buildCollectionsCsvByIds, buildFilesCsvByIds } from './services/exportService'
+import {
+  listBackups,
+  deleteBackup,
+  runBackupNow,
+  backupsDir
+} from './services/backupService'
+import { parseQuickAddInput } from '@shared/quickAdd'
+import { localDateStr } from '@shared/datetime'
+import type { NotificationCenter } from './notificationCenter'
 import { logActivity } from './services/activityService'
 import { statPath } from './services/fileIndexService'
-import { copyFileSync, existsSync, readFileSync, statSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'fs'
+import { dirname } from 'path'
+import { app } from 'electron'
 import { join } from 'path'
 
 type Handler = (input: unknown) => unknown | Promise<unknown>
+
+function applyLaunchOnStartup(enabled: boolean): void {
+  try {
+    app.setLoginItemSettings({ openAtLogin: enabled })
+  } catch (err) {
+    console.error('[MyDesk] setLoginItemSettings failed:', err)
+  }
+}
 
 function register(channel: string, schema: z.ZodTypeAny, handler: Handler): void {
   ipcMain.handle(channel, async (_event, rawInput: unknown) => {
@@ -49,7 +71,12 @@ function register(channel: string, schema: z.ZodTypeAny, handler: Handler): void
 
 const empty = z.object({}).passthrough()
 
-export function registerAllIpc(ctx: ServiceContext, vault: VaultManager): void {
+export interface IpcExtras {
+  notifications: NotificationCenter
+  hideQuickAdd: () => void
+}
+
+export function registerAllIpc(ctx: ServiceContext, vault: VaultManager, extras: IpcExtras): void {
   const { db, platform } = ctx
 
   // ---------- app ----------
@@ -256,9 +283,11 @@ export function registerAllIpc(ctx: ServiceContext, vault: VaultManager): void {
     searchService.globalSearch(db, (i as { query: string }).query)
   )
   register(IPC.SettingsGet, empty, () => settingsService.getSettings(db))
-  register(IPC.SettingsSet, v.settingsPatchSchema, (i) =>
-    settingsService.updateSettings(db, i as never)
-  )
+  register(IPC.SettingsSet, v.settingsPatchSchema, (i) => {
+    const next = settingsService.updateSettings(db, i as never)
+    applyLaunchOnStartup(next.launchOnStartup)
+    return next
+  })
 
   // ---------- backup / export ----------
   register(IPC.BackupExport, v.backupExportSchema, (i) => {
@@ -295,6 +324,113 @@ export function registerAllIpc(ctx: ServiceContext, vault: VaultManager): void {
     })
   })
   register(IPC.DialogPickDirectory, empty, async () => platform.pickDirectory({}))
+  register(IPC.DialogPickFiles, empty, async () => platform.pickFiles({ title: '选择文件（可多选）' }))
+
+  // ---------- 阶段二：全局快速添加 ----------
+  register(IPC.QuickAddSave, v.quickAddSaveSchema, async (i) => {
+    const input = i as { kind: 'task' | 'note' | 'url' | 'github' | 'file'; text: string; extra?: string }
+    const { kind, text, extra } = input
+    if (kind === 'task') {
+      const t = taskService.createTask(db, { title: text, notes: extra ?? '', dueDate: localDateStr() })
+      logActivity(db, 'task_created', t.id, t.title)
+      return { kind, item: t }
+    }
+    if (kind === 'note') {
+      const title = text.split('\n')[0].slice(0, 60) || '快速笔记'
+      const n = noteService.createNote(db, { title, content: [text, extra].filter(Boolean).join('\n\n') })
+      logActivity(db, 'note_created', n.id, n.title)
+      return { kind, item: n }
+    }
+    if (kind === 'file') {
+      const f = fileIndexService.createFileIndex(db, { path: text })
+      logActivity(db, 'file_created', f.id, f.name)
+      return { kind, item: f }
+    }
+    // url / github：先保存，后台补充元数据（不阻塞快速添加）
+    let host = text
+    try {
+      host = new URL(text).hostname
+    } catch {
+      /* ignore */
+    }
+    const gh = text.match(new RegExp('^https?://(www\.)?github\.com/([A-Za-z0-9-_.]+)/([A-Za-z0-9-_.]+)', 'i'))
+    const c = collectionService.createCollection(db, {
+      name: gh ? `${gh[2]}/${gh[3].replace(/.git$/, '')}` : host,
+      url: text,
+      type: kind === 'github' ? 'github' : 'website'
+    })
+    logActivity(db, 'collection_created', c.id, c.name)
+    void fetchUrlMeta(text)
+      .then((meta) => {
+        if (meta.title || meta.description || meta.favicon) {
+          collectionService.updateCollection(db, c.id, {
+            name: meta.title ?? c.name,
+            description: meta.description ?? '',
+            favicon: meta.favicon ?? undefined,
+            previewImage: meta.previewImage ?? undefined
+          })
+        }
+      })
+      .catch(() => undefined)
+    return { kind, item: c }
+  })
+
+  // ---------- 阶段二：批量操作 ----------
+  register(IPC.CollectionsBatchDelete, v.idsSchema, (i) => {
+    return { deleted: deleteManyCollections(db, (i as { ids: string[] }).ids) }
+  })
+  register(IPC.CollectionsBatchTags, v.batchTagsSchema, (i) => {
+    const p2 = i as { ids: string[]; mode: 'replace' | 'add'; tags: string[] }
+    return { updated: setManyTags(db, p2.ids, p2.mode, p2.tags) }
+  })
+  register(IPC.CollectionsExportSelected, v.exportSelectedSchema, (i) => {
+    const p3 = i as { filePath: string; ids: string[] }
+    const target = p3.filePath.endsWith('.csv') ? p3.filePath : p3.filePath + '.csv'
+    mkdirSync(dirname(target), { recursive: true })
+    writeFileSync(target, buildCollectionsCsvByIds(db, p3.ids), 'utf8')
+    return { path: target, count: p3.ids.length }
+  })
+  register(IPC.FilesBatchAdd, v.batchAddFilesSchema, (i) => {
+    return createManyFileIndex(db, (i as { paths: string[] }).paths)
+  })
+  register(IPC.FilesBatchCheck, v.idsSchema, (i) => {
+    const ids = (i as { ids: string[] }).ids
+    const results = ids.map((id) => {
+      try {
+        return { id, ...(fileIndexService.checkFile(db, id)) }
+      } catch (err) {
+        return { id, error: err instanceof Error ? err.message : String(err) }
+      }
+    })
+    return { results }
+  })
+  register(IPC.FilesExportSelected, v.exportSelectedSchema, (i) => {
+    const p4 = i as { filePath: string; ids: string[] }
+    const target = p4.filePath.endsWith('.csv') ? p4.filePath : p4.filePath + '.csv'
+    mkdirSync(dirname(target), { recursive: true })
+    writeFileSync(target, buildFilesCsvByIds(db, p4.ids), 'utf8')
+    return { path: target, count: p4.ids.length }
+  })
+
+  // ---------- 阶段二：备份中心 ----------
+  register(IPC.BackupList, empty, () => listBackups(ctx))
+  register(IPC.BackupDelete, v.backupFileNameSchema, (i) => {
+    deleteBackup(ctx, (i as { fileName: string }).fileName)
+    return true
+  })
+  register(IPC.BackupRunNow, empty, () => {
+    const fileName = runBackupNow(ctx)
+    logActivity(db, 'backup_exported', null, fileName)
+    return { fileName }
+  })
+  register(IPC.BackupOpenFolder, empty, async () => {
+    const { shell } = await import('electron')
+    await shell.openPath(backupsDir(ctx))
+    return true
+  })
+
+  // ---------- 阶段二：通知中心 ----------
+  register(IPC.NotificationList, empty, () => extras.notifications.list())
 
   // ---------- misc reads used by UI ----------
   register('collections:tags', empty, () => collectionService.allTags(db))

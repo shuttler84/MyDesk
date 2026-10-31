@@ -22,12 +22,32 @@ export const THEMES: ThemeName[] = ['mint', 'lavender', 'cream', 'midnight', 'gl
 /** 动画偏好：full 全部动画 / reduced 减少动画 / off 关闭动画 */
 export type AnimationPref = 'full' | 'reduced' | 'off'
 
+/** 关闭窗口行为：ask 每次询问 / tray 隐藏到托盘 / exit 直接退出 */
+export type TrayCloseBehavior = 'ask' | 'tray' | 'exit'
+
+/** 自动备份频率 */
+export type AutoBackupFrequency = 'daily' | 'weekly'
+
 export interface AppSettings {
   theme: ThemeName
   animation: AnimationPref
   startPage: PageId
   vaultAutoLockMinutes: number
   clipboardClearSeconds: number
+  /** 关闭主窗口时的行为 */
+  trayCloseBehavior: TrayCloseBehavior
+  /** 开机自动启动 */
+  launchOnStartup: boolean
+  /** 自动备份 */
+  autoBackupEnabled: boolean
+  autoBackupFrequency: AutoBackupFrequency
+  /** 自动备份保留份数 */
+  autoBackupKeepCount: number
+  /** 勿扰时间段（HH:mm），null 表示不启用 */
+  quietStart: string | null
+  quietEnd: string | null
+  /** 默认提醒策略：null=不提醒；0=到期时；N=提前 N 分钟 */
+  defaultReminderMinutes: number | null
 }
 
 export type PageId =
@@ -56,6 +76,8 @@ export interface Task {
   isImportant: boolean
   /** 列表内排序权重（REAL），拖拽排序持久化 */
   sortOrder: number
+  /** 自定义提醒：null=默认策略；0=到期时；N=提前 N 分钟 */
+  reminderMinutes: number | null
   createdAt: string
   updatedAt: string
 }
@@ -67,6 +89,7 @@ export interface TaskInput {
   dueDate?: string | null
   dueTime?: string | null
   isImportant?: boolean
+  reminderMinutes?: number | null
 }
 
 export type TaskView = 'today' | 'upcoming' | 'completed' | 'all'
@@ -288,6 +311,47 @@ export interface DashboardStats {
   recentNotes: Note[]
 }
 
+// ---------- 全局快速添加 ----------
+
+export type QuickAddKind = 'task' | 'note' | 'url' | 'github' | 'file'
+
+export interface QuickAddParse {
+  kind: QuickAddKind
+  /** 识别出的 URL / 文件路径 */
+  value: string
+  /** 对用户的说明 */
+  hint: string
+}
+
+// ---------- 通知中心 ----------
+
+export interface NotificationItem {
+  id: string
+  kind: 'success' | 'error' | 'info' | 'reminder'
+  title: string
+  body: string
+  createdAt: string
+}
+
+// ---------- 备份历史 ----------
+
+export interface BackupHistoryItem {
+  fileName: string
+  filePath: string
+  sizeBytes: number
+  createdAt: string
+  appVersion: string | null
+  schemaVersion: number | null
+  formatVersion: number | null
+  includesVault: boolean | null
+  counts: { tasks: number; collections: number; notes: number; files: number; attachments: number } | null
+  /** 完整性检查结果：null = 尚未检查 */
+  integrity: 'ok' | 'failed' | null
+  integrityMessage: string | null
+  /** 是否为自动备份生成的文件 */
+  isAuto: boolean
+}
+
 // ---------- Backup (.mydeskpack) ----------
 
 export interface BackupManifest {
@@ -339,4 +403,7 @@ export interface GlobalSearchResult {
   id: string
   title: string
   snippet: string
+  /** 关键词在 title 中的位置（用于高亮），-1 表示不在标题中 */
+  matchStart: number
+  matchLength: number
 }

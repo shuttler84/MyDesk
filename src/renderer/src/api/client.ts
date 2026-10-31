@@ -105,11 +105,38 @@ export const api = {
     run: (filePath: string, format: T.ExportFormat) =>
       call<{ path: string; count: number }>(IPC.ExportData, { filePath, format })
   },
+  notifications: {
+    list: () => call<T.NotificationItem[]>(IPC.NotificationList)
+  },
+  quickAdd: {
+    save: (kind: T.QuickAddKind, text: string, extra?: string) =>
+      call<{ kind: T.QuickAddKind; item: unknown }>(IPC.QuickAddSave, { kind, text, extra })
+  },
+  batch: {
+    collectionsDelete: (ids: string[]) => call<{ deleted: number }>(IPC.CollectionsBatchDelete, { ids }),
+    collectionsTags: (ids: string[], mode: 'replace' | 'add', tags: string[]) =>
+      call<{ updated: number }>(IPC.CollectionsBatchTags, { ids, mode, tags }),
+    collectionsExport: (filePath: string, ids: string[]) =>
+      call<{ path: string; count: number }>(IPC.CollectionsExportSelected, { filePath, ids }),
+    filesAdd: (paths: string[]) =>
+      call<{ added: T.FileIndexItem[]; failed: Array<{ path: string; reason: string }> }>(IPC.FilesBatchAdd, { paths }),
+    filesCheck: (ids: string[]) =>
+      call<{ results: Array<Record<string, unknown>> }>(IPC.FilesBatchCheck, { ids }),
+    filesExport: (filePath: string, ids: string[]) =>
+      call<{ path: string; count: number }>(IPC.FilesExportSelected, { filePath, ids })
+  },
+  backupCenter: {
+    list: () => call<T.BackupHistoryItem[]>(IPC.BackupList),
+    del: (fileName: string) => call<boolean>(IPC.BackupDelete, { fileName }),
+    runNow: () => call<{ fileName: string }>(IPC.BackupRunNow),
+    openFolder: () => call<boolean>(IPC.BackupOpenFolder)
+  },
   dialog: {
     saveFile: (opts: { defaultName?: string; filters?: { name: string; extensions: string[] }[] }) =>
       call<string | null>(IPC.DialogSaveFile, opts),
     openFile: () => call<string | null>(IPC.DialogOpenFile),
-    pickDirectory: () => call<string | null>(IPC.DialogPickDirectory)
+    pickDirectory: () => call<string | null>(IPC.DialogPickDirectory),
+    pickFiles: () => call<string[]>(IPC.DialogPickFiles)
   }
 }
 

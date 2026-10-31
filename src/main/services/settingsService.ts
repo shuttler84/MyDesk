@@ -2,14 +2,22 @@
  * 设置服务 — key-value 持久化，带类型安全的默认值。
  */
 import type { DB } from '@database/connection'
-import type { AppSettings, AnimationPref, ThemeName, PageId } from '@shared/types'
+import type { AppSettings, AnimationPref, ThemeName, PageId, TrayCloseBehavior, AutoBackupFrequency } from '@shared/types'
 
 export const DEFAULT_SETTINGS: AppSettings = {
   theme: 'mint',
   animation: 'full',
   startPage: 'dashboard',
   vaultAutoLockMinutes: 10,
-  clipboardClearSeconds: 30
+  clipboardClearSeconds: 30,
+  trayCloseBehavior: 'ask',
+  launchOnStartup: false,
+  autoBackupEnabled: false,
+  autoBackupFrequency: 'daily',
+  autoBackupKeepCount: 10,
+  quietStart: null,
+  quietEnd: null,
+  defaultReminderMinutes: null
 }
 
 const SETTING_KEYS = [
@@ -17,7 +25,15 @@ const SETTING_KEYS = [
   'animation',
   'startPage',
   'vaultAutoLockMinutes',
-  'clipboardClearSeconds'
+  'clipboardClearSeconds',
+  'trayCloseBehavior',
+  'launchOnStartup',
+  'autoBackupEnabled',
+  'autoBackupFrequency',
+  'autoBackupKeepCount',
+  'quietStart',
+  'quietEnd',
+  'defaultReminderMinutes'
 ] as const
 
 function coerce<K extends keyof AppSettings>(key: K, raw: string | undefined): AppSettings[K] {
@@ -43,7 +59,17 @@ export function getSettings(db: DB): AppSettings {
     animation: coerce('animation', map.get('animation')) as AnimationPref,
     startPage: coerce('startPage', map.get('startPage')) as PageId,
     vaultAutoLockMinutes: coerce('vaultAutoLockMinutes', map.get('vaultAutoLockMinutes')) as number,
-    clipboardClearSeconds: coerce('clipboardClearSeconds', map.get('clipboardClearSeconds')) as number
+    clipboardClearSeconds: coerce('clipboardClearSeconds', map.get('clipboardClearSeconds')) as number,
+    trayCloseBehavior: coerce('trayCloseBehavior', map.get('trayCloseBehavior')) as TrayCloseBehavior,
+    launchOnStartup: coerce('launchOnStartup', map.get('launchOnStartup')) as boolean,
+    autoBackupEnabled: coerce('autoBackupEnabled', map.get('autoBackupEnabled')) as boolean,
+    autoBackupFrequency: coerce('autoBackupFrequency', map.get('autoBackupFrequency')) as AutoBackupFrequency,
+    autoBackupKeepCount: coerce('autoBackupKeepCount', map.get('autoBackupKeepCount')) as number,
+    quietStart: (map.get('quietStart') !== undefined ? coerce('quietStart', map.get('quietStart')) : null) as string | null,
+    quietEnd: (map.get('quietEnd') !== undefined ? coerce('quietEnd', map.get('quietEnd')) : null) as string | null,
+    defaultReminderMinutes: (map.get('defaultReminderMinutes') !== undefined
+      ? coerce('defaultReminderMinutes', map.get('defaultReminderMinutes'))
+      : null) as number | null
   }
 }
 

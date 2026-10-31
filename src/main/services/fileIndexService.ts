@@ -188,3 +188,68 @@ export function allFileTypes(db: DB): string[] {
   }[]
   return rows.map((r) => r.file_type).sort()
 }
+
+// ---------- 批量操作（阶段二） ----------
+
+export interface BatchAddResult {
+  added: FileIndexItem[]
+  failed: Array<{ path: string; reason: string }>
+}
+
+/** 批量添加文件路径（跳过目录与重复路径），只读 stat，不动文件 */
+export function createManyFileIndex(
+  db: DB,
+  paths: string[]
+): BatchAddResult {
+  const result: BatchAddResult = { added: [], failed: [] }
+  const existing = new Set(
+    (db.prepare(`SELECT path FROM file_index`).all() as Array<{ path: string }>).map((r) => r.path.toLowerCase())
+  )
+  for (const path of paths) {
+    try {
+      const info = statPath(path)
+      if (info.isDirectory) {
+        result.failed.push({ path, reason: '该路径是文件夹而不是文件' })
+        continue
+      }
+      if (!info.exists) {
+        result.failed.push({ path, reason: '路径不存在' })
+        continue
+      }
+      if (existing.has(path.toLowerCase())) {
+        result.failed.push({ path, reason: '该文件已在索引中' })
+        continue
+      }
+      existing.add(path.toLowerCase())
+      result.added.push(createFileIndex(db, { path }))
+    } catch (err) {
+      result.failed.push({ path, reason: err instanceof Error ? err.message : String(err) })
+    }
+  }
+  return result
+}
+
+export interface BatchCheckProgress {
+  checked: number
+  total: number
+  valid: number
+  invalid: number
+  current: string
+}
+
+/** 按选中 ID 取文件索引（保持传入顺序），用于批量导出 */
+export function getFileByIds(db: DB, ids: string[]): FileIndexItem[] {
+  const stmt = db.prepare(`SELECT * FROM file_index WHERE id = ?`)
+  const out: FileIndexItem[] = []
+  for (const id of ids) {
+    const row = stmt.get(id) as FileRow | undefined
+    if (row) out.push(rowToItem(row))
+  }
+  return out
+}
+
+/** 目录分组键：取路径的父目录 */
+export function parentDir(path: string): string {
+  const idx = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'))
+  return idx > 0 ? path.slice(0, idx) : path
+}

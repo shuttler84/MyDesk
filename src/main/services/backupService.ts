@@ -15,7 +15,7 @@
  */
 import AdmZip from 'adm-zip'
 import { createHash } from 'crypto'
-import { mkdtempSync, rmSync, mkdirSync, readdirSync, copyFileSync, existsSync, readFileSync } from 'fs'
+import { mkdtempSync, rmSync, mkdirSync, readdirSync, copyFileSync, existsSync, readFileSync, statSync, unlinkSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { openDatabase, vacuumSnapshot, getUserVersion } from '@database/connection'
@@ -184,11 +184,11 @@ function validatePack(ctx: ServiceContext, filePath: string): ValidatedPack {
     const warnings: string[] = []
     if (schemaVersion < LATEST_SCHEMA_VERSION) {
       warnings.push(
-        `Backup schema v${schemaVersion} will be migrated to v${LATEST_SCHEMA_VERSION} during import.`
+        `备份的数据库结构 v${schemaVersion} 将在恢复时自动迁移到 v${LATEST_SCHEMA_VERSION}。`
       )
     }
     if (manifest.appVersion !== ctx.appVersion) {
-      warnings.push(`Backup was created by MyDesk ${manifest.appVersion}, current version is ${ctx.appVersion}.`)
+      warnings.push(`该备份由 MyDesk ${manifest.appVersion} 创建，当前软件版本为 ${ctx.appVersion}。`)
     }
 
     return {
@@ -296,4 +296,183 @@ export function importBackup(ctx: ServiceContext, filePath: string): ImportResul
     rmSync(tempDir, { recursive: true, force: true })
     rmSync(safetyDir, { recursive: true, force: true })
   }
+}
+
+// ---------- 备份中心（阶段二）：历史 / 校验 / 自动备份 ----------
+
+import type { BackupHistoryItem } from '@shared/types'
+import { getSettings } from './settingsService'
+
+/** 默认自动备份目录：userData/backups */
+export function backupsDir(ctx: ServiceContext): string {
+  const dir = join(ctx.platform.dataDir(), 'backups')
+  mkdirSync(dir, { recursive: true })
+  return dir
+}
+
+function readPackInfo(filePath: string): {
+  manifest: BackupManifest | null
+  counts: BackupHistoryItem['counts']
+  integrity: 'ok' | 'failed'
+  integrityMessage: string | null
+} {
+  let manifest: BackupManifest | null = null
+  let counts: BackupHistoryItem['counts'] = null
+  let integrity: 'ok' | 'failed' = 'ok'
+  let integrityMessage: string | null = null
+  try {
+    const zip = new AdmZip(filePath)
+    const entry = zip.getEntry('manifest.json')
+    if (!entry) {
+      return { manifest: null, counts: null, integrity: 'failed', integrityMessage: '缺少 manifest.json' }
+    }
+    manifest = JSON.parse(entry.getData().toString('utf8')) as BackupManifest
+    // 逐文件 SHA-256 校验
+    for (const [path, expected] of Object.entries(manifest.files ?? {})) {
+      const e = zip.getEntry(path)
+      if (!e) {
+        integrity = 'failed'
+        integrityMessage = `归档中缺少 ${path}`
+        break
+      }
+      if (sha256Buf(e.getData()) !== expected) {
+        integrity = 'failed'
+        integrityMessage = `${path} 校验值不匹配`
+        break
+      }
+    }
+    if (integrity === 'ok' && integrityMessage === null) integrityMessage = '所有文件校验通过'
+    // 读取快照中的记录数（临时解压，只读）
+    if (integrity === 'ok') {
+      const tmp = newTempDir()
+      try {
+        zip.extractAllTo(tmp, true)
+        const d = openDatabase(join(tmp, 'data', 'database.sqlite'))
+        try {
+          if (getUserVersion(d) === 0) {
+            integrity = 'failed'
+            integrityMessage = '数据库快照为空或不是 MyDesk 数据库'
+          } else {
+            const n = (sql: string): number => Number((d.prepare(sql).get() as { c: number }).c)
+            counts = {
+              tasks: n(`SELECT COUNT(*) AS c FROM tasks`),
+              collections: n(`SELECT COUNT(*) AS c FROM collections`),
+              notes: n(`SELECT COUNT(*) AS c FROM notes`),
+              files: n(`SELECT COUNT(*) AS c FROM file_index`),
+              attachments: n(`SELECT COUNT(*) AS c FROM note_attachments`)
+            }
+          }
+        } finally {
+          d.close()
+        }
+      } finally {
+        rmSync(tmp, { recursive: true, force: true })
+      }
+    }
+  } catch (err) {
+    integrity = 'failed'
+    integrityMessage = err instanceof Error ? err.message : String(err)
+  }
+  return { manifest, counts, integrity, integrityMessage }
+}
+
+/** 列出自动备份目录中的全部备份（按时间倒序） */
+export function listBackups(ctx: ServiceContext): BackupHistoryItem[] {
+  const dir = backupsDir(ctx)
+  const items: BackupHistoryItem[] = []
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.mydeskpack')) continue
+    const filePath = join(dir, name)
+    let sizeBytes = 0
+    let mtime = new Date(0)
+    try {
+      const st = statSync(filePath)
+      sizeBytes = st.size
+      mtime = st.mtime
+    } catch {
+      continue
+    }
+    const info = readPackInfo(filePath)
+    items.push({
+      fileName: name,
+      filePath,
+      sizeBytes,
+      createdAt: info.manifest?.createdAt ?? mtime.toISOString(),
+      appVersion: info.manifest?.appVersion ?? null,
+      schemaVersion: info.manifest?.schemaVersion ?? null,
+      formatVersion: info.manifest?.formatVersion ?? null,
+      includesVault: info.manifest?.includesVault ?? null,
+      counts: info.counts,
+      integrity: info.integrity,
+      integrityMessage: info.integrityMessage,
+      isAuto: name.includes('自动备份')
+    })
+  }
+  items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  return items
+}
+
+/** 删除自动备份目录中的指定备份（仅限该目录内的文件，防路径逃逸） */
+export function deleteBackup(ctx: ServiceContext, fileName: string): void {
+  if (fileName.includes('/') || fileName.includes(String.fromCharCode(92)) || !fileName.endsWith('.mydeskpack')) {
+    throw new Error('非法的备份文件名')
+  }
+  const p = join(backupsDir(ctx), fileName)
+  if (!existsSync(p)) throw new Error('备份文件不存在')
+  unlinkSync(p)
+}
+
+/** 立即创建一次自动备份（写入自动备份目录） */
+export function runBackupNow(ctx: ServiceContext): BackupHistoryItem['fileName'] {
+  const dir = backupsDir(ctx)
+  const stamp = nowIso().replace(/[:.]/g, '-').slice(0, 19)
+  const fileName = `MyDesk自动备份-${stamp}.mydeskpack`
+  exportBackup(ctx, join(dir, fileName))
+  pruneBackups(ctx)
+  return fileName
+}
+
+/** 按保留份数清理最旧的自动备份 */
+function pruneBackups(ctx: ServiceContext): void {
+  const keep = getSettings(ctx.db).autoBackupKeepCount
+  const dir = backupsDir(ctx)
+  const files = readdirSync(dir)
+    .filter((n) => n.endsWith('.mydeskpack') && n.includes('自动备份'))
+    .map((n) => ({ n, m: statSync(join(dir, n)).mtimeMs }))
+    .sort((a, b) => b.m - a.m)
+  for (const f of files.slice(keep)) {
+    try {
+      unlinkSync(join(dir, f.n))
+    } catch {
+      /* 单个删除失败不阻断 */
+    }
+  }
+}
+
+/**
+ * 自动备份检查（主进程定时调用，绝不阻塞正常使用）：
+ * 距上次成功自动备份超过设定频率时执行一次。
+ * 返回：null=未到时间或未启用；否则为结果摘要。
+ */
+export function autoBackupIfDue(
+  ctx: ServiceContext,
+  now: Date
+): { fileName: string; triggered: 'daily' | 'weekly' } | null {
+  const settings = getSettings(ctx.db)
+  if (!settings.autoBackupEnabled) return null
+  const lastRow = ctx.db
+    .prepare(`SELECT value FROM settings WHERE key = 'lastAutoBackupAt'`)
+    .get() as { value: string } | undefined
+  const last = lastRow ? Date.parse(lastRow.value) : 0
+  const intervalMs = settings.autoBackupFrequency === 'weekly' ? 7 * 86400_000 : 86400_000
+  if (Number.isFinite(last) && now.getTime() - last < intervalMs) return null
+  const fileName = runBackupNow(ctx)
+  // 记录时间戳（直接写 KV，不影响用户设置）
+  ctx.db
+    .prepare(
+      `INSERT INTO settings (key, value) VALUES ('lastAutoBackupAt', ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+    )
+    .run(nowIso())
+  return { fileName, triggered: settings.autoBackupFrequency }
 }

@@ -1,17 +1,13 @@
 /**
- * 顶部工具栏：全局搜索、快速添加任务、通知（最近活动）、主题切换、数据状态。
+ * 顶部工具栏（阶段二增强版）：
+ * - 全局搜索：实时搜索、分类筛选、关键词高亮、搜索历史（localStorage）、Ctrl+K 呼出、点击跳转
+ * - 通知中心：统一接收主进程推送（任务提醒 / 备份 / 系统事件），支持清空
+ * - 快速添加、主题切换、本地数据状态
  */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import {
-  Search,
-  Plus,
-  Bell,
-  Palette,
-  Database,
-  CornerDownLeft
-} from 'lucide-react'
-import type { GlobalSearchResult, ThemeName } from '@shared/types'
+import { Search, Plus, Bell, Palette, Database, CornerDownLeft, History, Trash2 } from 'lucide-react'
+import type { GlobalSearchResult, NotificationItem, ThemeName } from '@shared/types'
 import { useApp, THEME_LABELS } from '../store/AppStore'
 import { api } from '../api/client'
 import { Input, Tag } from '../components/ui'
@@ -23,17 +19,73 @@ const MODULE_NAMES: Record<GlobalSearchResult['module'], string> = {
   notes: '笔记'
 }
 
+type SearchFilter = 'all' | GlobalSearchResult['module']
+const SEARCH_HISTORY_KEY = 'mydesk-search-history'
+
+function loadSearchHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(SEARCH_HISTORY_KEY)
+    const parsed = raw ? (JSON.parse(raw) as unknown) : []
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string').slice(0, 10) : []
+  } catch {
+    return []
+  }
+}
+
+function saveSearchHistory(list: string[]): void {
+  try {
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(list.slice(0, 10)))
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 关键词高亮（纯文本切分，React 转义，无注入风险） */
+function Highlight({ text, start, length }: { text: string; start: number; length: number }) {
+  if (start < 0 || length <= 0) return <>{text}</>
+  return (
+    <>
+      {text.slice(0, start)}
+      <mark className="rounded bg-warning/30 px-0.5 text-text">{text.slice(start, start + length)}</mark>
+      {text.slice(start + length)}
+    </>
+  )
+}
+
 export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
   const { settings, patchSettings, toast, jumpTo, jumpTarget, page } = useApp()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<GlobalSearchResult[] | null>(null)
+  const [filter, setFilter] = useState<SearchFilter>('all')
+  const [history, setHistory] = useState<string[]>(loadSearchHistory)
+  const [showHistory, setShowHistory] = useState(false)
   const [showThemeMenu, setShowThemeMenu] = useState(false)
-  const [activityCount, setActivityCount] = useState(0)
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [showActivity, setShowActivity] = useState(false)
-  const [activities, setActivities] = useState<Array<{ id: number; title: string; createdAt: string; type: string }>>([])
+  const [unread, setUnread] = useState(0)
   const searchRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
-  // 全局搜索（防抖）
+  // 通知中心：订阅主进程推送 + 拉取已有列表
+  useEffect(() => {
+    void api.notifications.list().then((items) => {
+      setNotifications(items)
+      setUnread(items.length)
+    }).catch(() => undefined)
+    const off = window.mydesk.onPush('push:notification', (payload) => {
+      const item = payload as NotificationItem
+      setNotifications((prev) => [item, ...prev].slice(0, 100))
+      setUnread((u) => u + 1)
+      if (item.kind === 'error') {
+        toast('error', item.title)
+      } else if (item.kind === 'reminder') {
+        toast('info', `${item.title} —— ${item.body}`)
+      }
+    })
+    return off
+  }, [toast])
+
+  // 全局搜索（防抖 220ms）
   useEffect(() => {
     const q = query.trim()
     if (!q) {
@@ -46,7 +98,7 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
       } catch {
         setResults([])
       }
-    }, 250)
+    }, 220)
     return () => clearTimeout(timer)
   }, [query])
 
@@ -55,24 +107,42 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
     const onDown = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setResults(null)
+        setShowHistory(false)
       }
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
 
-  // 通知徽标：最近活动数（进入页面时刷新）
+  // Ctrl+K 呼出搜索
   useEffect(() => {
-    void api.timeline.stats().then((s) => {
-      setActivityCount(Math.min(s.activities.length, 99))
-      setActivities(s.activities.slice(0, 8).map((a) => ({ id: a.id, title: a.title, createdAt: a.createdAt, type: a.type })))
-    }).catch(() => undefined)
-  }, [page, jumpTarget])
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+        setShowHistory(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const filtered = useMemo(() => {
+    if (results === null) return null
+    return filter === 'all' ? results : results.filter((r) => r.module === filter)
+  }, [results, filter])
 
   const openResult = (r: GlobalSearchResult) => {
+    const q = query.trim()
+    if (q) {
+      const next = [q, ...history.filter((h) => h !== q)].slice(0, 10)
+      setHistory(next)
+      saveSearchHistory(next)
+    }
     jumpTo(r.module)
     setQuery('')
     setResults(null)
+    setShowHistory(false)
   }
 
   const applyTheme = async (t: ThemeName) => {
@@ -81,19 +151,34 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
     toast('success', `主题已切换：${THEME_LABELS[t]}`)
   }
 
+  // 跳转/切页时刷新通知列表
+  useEffect(() => {
+    void api.notifications.list().then((items) => {
+      setNotifications(items)
+      setUnread(items.length)
+    }).catch(() => undefined)
+  }, [page, jumpTarget])
+
+  const clearHistory = useCallback(() => {
+    setHistory([])
+    saveSearchHistory([])
+  }, [])
+
   return (
     <header className="glass-card flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-5">
       {/* 全局搜索 */}
       <div ref={searchRef} className="relative w-80">
         <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-3" />
         <Input
+          ref={searchInputRef}
           value={query}
           onChange={setQuery}
-          placeholder="搜索任务、收藏、文件、笔记…"
+          onFocus={() => setShowHistory(true)}
+          placeholder="搜索任务、收藏、文件、笔记…（Ctrl+K）"
           className="pl-8"
         />
         <AnimatePresence>
-          {results !== null && (
+          {(results !== null || (showHistory && history.length > 0)) && (
             <motion.div
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
@@ -101,24 +186,70 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
               transition={{ duration: 0.15 }}
               className="glass-card absolute left-0 right-0 top-11 z-40 max-h-96 overflow-y-auto rounded-xl border border-border shadow-lifted"
             >
-              {results.length === 0 ? (
-                <p className="px-4 py-3 text-xs text-text-3">无结果。保险箱内容永远不会被搜索。</p>
-              ) : (
-                results.map((r, i) => (
-                  <button
-                    key={`${r.module}-${r.id}-${i}`}
-                    onClick={() => openResult(r)}
-                    className="group flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition-colors hover:bg-surface-2"
-                  >
-                    <Tag className="!cursor-pointer">{MODULE_NAMES[r.module]}</Tag>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm text-text">{r.title}</span>
-                      {r.snippet && <span className="block truncate text-xs text-text-3">{r.snippet}</span>}
-                    </span>
-                    <CornerDownLeft size={13} className="text-text-3 opacity-0 group-hover:opacity-100" />
-                  </button>
-                ))
+              {/* 分类筛选 */}
+              {results !== null && results.length > 0 && (
+                <div className="sticky top-0 z-10 flex flex-wrap gap-1 border-b border-border bg-surface/95 px-3 py-2 backdrop-blur">
+                  {(['all', 'tasks', 'collections', 'files', 'notes'] as SearchFilter[]).map((f) => (
+                    <Tag key={f} active={filter === f} onClick={() => setFilter(f)}>
+                      {f === 'all' ? '全部' : MODULE_NAMES[f]}
+                      {f !== 'all' && results && (
+                        <span className="ml-1 opacity-70">{results.filter((r) => r.module === f).length}</span>
+                      )}
+                    </Tag>
+                  ))}
+                </div>
               )}
+
+              {results !== null && results.length === 0 && (
+                <div className="px-4 py-6 text-center">
+                  <Search size={22} className="mx-auto mb-2 text-text-3" />
+                  <p className="text-sm text-text-2">没有找到与「{query.trim()}」相关的内容</p>
+                  <p className="mt-1 text-xs text-text-3">保险箱内容永远不会被搜索</p>
+                </div>
+              )}
+
+              {results === null && history.length > 0 && (
+                <div className="p-2">
+                  <div className="flex items-center justify-between px-2 py-1">
+                    <span className="flex items-center gap-1 text-xs font-semibold text-text-2">
+                      <History size={12} /> 搜索历史
+                    </span>
+                    <button className="text-xs text-text-3 hover:text-danger" onClick={clearHistory}>
+                      清空
+                    </button>
+                  </div>
+                  {history.map((h) => (
+                    <button
+                      key={h}
+                      onClick={() => {
+                        setQuery(h)
+                        setShowHistory(false)
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
+                    >
+                      <History size={13} className="text-text-3" />
+                      {h}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {filtered?.map((r, i) => (
+                <button
+                  key={`${r.module}-${r.id}-${i}`}
+                  onClick={() => openResult(r)}
+                  className="group flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition-colors hover:bg-surface-2"
+                >
+                  <Tag className="!cursor-pointer">{MODULE_NAMES[r.module]}</Tag>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-text">
+                      <Highlight text={r.title} start={r.matchStart} length={r.matchLength} />
+                    </span>
+                    {r.snippet && <span className="block truncate text-xs text-text-3">{r.snippet}</span>}
+                  </span>
+                  <CornerDownLeft size={13} className="text-text-3 opacity-0 group-hover:opacity-100" />
+                </button>
+              ))}
             </motion.div>
           )}
         </AnimatePresence>
@@ -136,17 +267,17 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
         <span className="hidden sm:inline">快速添加</span>
       </button>
 
-      {/* 通知 */}
+      {/* 通知中心 */}
       <div className="relative">
         <button
           onClick={() => setShowActivity((v) => !v)}
-          title="最近活动"
+          title="通知中心"
           className="relative rounded-xl p-2 text-text-2 transition-colors hover:bg-surface-3 hover:text-text"
         >
           <Bell size={18} />
-          {activityCount > 0 && (
+          {unread > 0 && (
             <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-bold text-white">
-              {activityCount > 99 ? '99+' : activityCount}
+              {unread > 99 ? '99+' : unread}
             </span>
           )}
         </button>
@@ -156,19 +287,38 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 4 }}
-              className="glass-card absolute right-0 top-11 z-40 w-80 rounded-xl border border-border p-2 shadow-lifted"
+              className="glass-card absolute right-0 top-11 z-40 flex max-h-[420px] w-96 flex-col rounded-xl border border-border shadow-lifted"
             >
-              <p className="px-2 py-1.5 text-xs font-semibold text-text-2">最近活动</p>
-              {activities.length === 0 ? (
-                <p className="px-2 py-2 text-xs text-text-3">暂无活动</p>
-              ) : (
-                activities.map((a) => (
-                  <div key={a.id} className="rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-2">
-                    <p className="truncate text-xs text-text">{a.title || a.type}</p>
-                    <p className="text-[10px] text-text-3">{new Date(a.createdAt).toLocaleString()}</p>
-                  </div>
-                ))
-              )}
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                <span className="text-xs font-semibold text-text-2">通知中心</span>
+                <button
+                  className="flex items-center gap-1 text-xs text-text-3 hover:text-danger"
+                  onClick={() => {
+                    setNotifications([])
+                    setUnread(0)
+                  }}
+                >
+                  <Trash2 size={12} /> 清空
+                </button>
+              </div>
+              <div className="overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <p className="px-4 py-8 text-center text-xs text-text-3">暂无通知</p>
+                ) : (
+                  notifications.map((n) => (
+                    <div key={n.id} className="border-b border-border/50 px-3 py-2.5 last:border-0">
+                      <p className="text-xs font-medium text-text">
+                        {n.kind === 'reminder' && '⏰ '}
+                        {n.kind === 'error' && '❌ '}
+                        {n.kind === 'success' && '✅ '}
+                        {n.title}
+                      </p>
+                      {n.body && <p className="mt-0.5 text-[11px] leading-4 text-text-3">{n.body}</p>}
+                      <p className="mt-0.5 text-[10px] text-text-3">{new Date(n.createdAt).toLocaleString()}</p>
+                    </div>
+                  ))
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -189,7 +339,7 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 4 }}
-              className="glass-card absolute right-0 top-11 z-40 w-56 rounded-xl border border-border p-1.5 shadow-lifted"
+              className="glass-card absolute right-0 top-11 z-40 w-44 rounded-xl border border-border p-1.5 shadow-lifted"
             >
               {(Object.keys(THEME_LABELS) as ThemeName[]).map((t) => (
                 <button

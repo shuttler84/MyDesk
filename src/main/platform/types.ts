@@ -23,8 +23,10 @@ export interface PlatformAdapter {
   clipboardWriteText(text: string): void
   /** 读取剪贴板纯文本 */
   clipboardReadText(): Promise<string>
-  /** 选择文件对话框 */
+  /** 选择文件对话框（单个） */
   pickFile(options: { title?: string; filters?: { name: string; extensions: string[] }[] }): Promise<string | null>
+  /** 选择文件对话框（多个） */
+  pickFiles(options: { title?: string; filters?: { name: string; extensions: string[] }[] }): Promise<string[]>
   /** 保存文件对话框 */
   pickSaveFile(options: {
     title?: string

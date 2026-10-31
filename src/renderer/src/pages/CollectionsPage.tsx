@@ -78,6 +78,12 @@ export function CollectionsPage() {
   const [gridView, setGridView] = useState(true)
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<Collection | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [batchTagsOpen, setBatchTagsOpen] = useState(false)
+  const [batchTagsMode, setBatchTagsMode] = useState<'replace' | 'add'>('add')
+  const [batchTagsText, setBatchTagsText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [renderLimit, setRenderLimit] = useState(60)
 
   const load = useCallback(async () => {
     const filter: CollectionFilterLike = { type, status, tags: selectedTags, search }
@@ -91,6 +97,7 @@ export function CollectionsPage() {
 
   useEffect(() => {
     setItems(null)
+    setRenderLimit(60)
     void load()
   }, [load])
 
@@ -105,6 +112,68 @@ export function CollectionsPage() {
       await load()
     } catch (err) {
       toast('error', err instanceof Error ? err.message : '删除失败')
+    }
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectAllVisible = () => {
+    if (items) setSelected(new Set(items.map((c) => c.id)))
+  }
+
+  const batchDelete = async () => {
+    if (selected.size === 0) return
+    if (!window.confirm(`确定删除选中的 ${selected.size} 条收藏吗？此操作不可撤销。`)) return
+    setBusy(true)
+    try {
+      const res = await api.batch.collectionsDelete([...selected])
+      toast('success', `已删除 ${res.deleted} 条收藏`)
+      setSelected(new Set())
+      await load()
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '批量删除失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const batchTags = async () => {
+    if (selected.size === 0) return
+    const tags = batchTagsText.split(/[,，]/).map((t) => t.trim()).filter(Boolean)
+    if (tags.length === 0) return
+    setBusy(true)
+    try {
+      const res = await api.batch.collectionsTags([...selected], batchTagsMode, tags)
+      toast('success', `已更新 ${res.updated} 条收藏的标签`)
+      setBatchTagsOpen(false)
+      setBatchTagsText('')
+      await load()
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '批量修改标签失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const exportSelected = async () => {
+    if (selected.size === 0) return
+    try {
+      const target = await api.dialog.saveFile({
+        defaultName: `MyDesk收藏导出-${new Date().toISOString().slice(0, 10)}.csv`,
+        filters: [{ name: 'CSV', extensions: ['csv'] }]
+      })
+      if (!target) return
+      const res = await api.batch.collectionsExport(target, [...selected])
+      toast('success', `已导出 ${res.count} 条收藏 → ${res.path}`)
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '导出失败')
     }
   }
 
@@ -196,6 +265,32 @@ export function CollectionsPage() {
         </div>
       )}
 
+      {/* 批量操作工具条 */}
+      {selected.size > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card flex flex-wrap items-center gap-2 rounded-xl border border-primary/40 px-4 py-2.5"
+        >
+          <span className="text-sm font-medium text-text">已选 {selected.size} 项</span>
+          <Button className="text-xs" onClick={selectAllVisible}>
+            全选当前列表
+          </Button>
+          <Button className="text-xs" onClick={() => setBatchTagsOpen(true)}>
+            批量修改标签
+          </Button>
+          <Button className="text-xs" onClick={() => void exportSelected()}>
+            导出选中
+          </Button>
+          <Button variant="danger" className="text-xs" disabled={busy} onClick={() => void batchDelete()}>
+            批量删除
+          </Button>
+          <Button variant="ghost" className="text-xs" onClick={() => setSelected(new Set())}>
+            取消选择
+          </Button>
+        </motion.div>
+      )}
+
       {items === null ? (
         <SkeletonList rows={4} />
       ) : items.length === 0 ? (
@@ -212,7 +307,7 @@ export function CollectionsPage() {
       ) : gridView ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <AnimatePresence initial={false}>
-            {items.map((c) => (
+            {items.slice(0, renderLimit).map((c) => (
               <motion.div
                 key={c.id}
                 layout
@@ -222,6 +317,8 @@ export function CollectionsPage() {
               >
                 <CollectionCard
                   c={c}
+                  selected={selected.has(c.id)}
+                  onToggle={() => toggleSelect(c.id)}
                   onOpen={() => void openInBrowser(c)}
                   onCopy={() => void copyLink(c)}
                   onEdit={() => {
@@ -237,7 +334,7 @@ export function CollectionsPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {items.map((c) => (
+          {items.slice(0, renderLimit).map((c) => (
             <Card key={c.id} hover className="group flex items-center gap-3 px-4 py-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-3 text-text-2">
                 <TypeIcon type={c.type} />
@@ -268,6 +365,38 @@ export function CollectionsPage() {
           ))}
         </div>
       )}
+
+      {/* 长列表分页加载 */}
+      {items !== null && items.length > renderLimit && (
+        <div className="flex justify-center py-2">
+          <Button onClick={() => setRenderLimit((n) => n + 60)}>
+            加载更多（还有 {items.length - renderLimit} 条）
+          </Button>
+        </div>
+      )}
+
+      {/* 批量修改标签 */}
+      <Modal open={batchTagsOpen} onClose={() => setBatchTagsOpen(false)} title={`批量修改标签（已选 ${selected.size} 项）`}>
+        <Field label="方式">
+          <Select
+            value={batchTagsMode}
+            onChange={(v) => setBatchTagsMode(v as 'replace' | 'add')}
+            options={[
+              { value: 'add', label: '追加标签（保留已有）' },
+              { value: 'replace', label: '替换全部标签' }
+            ]}
+          />
+        </Field>
+        <Field label="标签（逗号分隔）">
+          <Input value={batchTagsText} onChange={setBatchTagsText} placeholder="react, 教程" />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button onClick={() => setBatchTagsOpen(false)}>取消</Button>
+          <Button variant="primary" disabled={busy || !batchTagsText.trim()} onClick={() => void batchTags()}>
+            应用到 {selected.size} 项
+          </Button>
+        </div>
+      </Modal>
 
       <CollectionEditorModal
         open={editorOpen}
@@ -321,6 +450,8 @@ function RowBtn({
 
 function CollectionCard({
   c,
+  selected,
+  onToggle,
   onOpen,
   onCopy,
   onEdit,
@@ -328,6 +459,8 @@ function CollectionCard({
   onChanged
 }: {
   c: Collection
+  selected: boolean
+  onToggle: () => void
   onOpen: () => void
   onCopy: () => void
   onEdit: () => void
@@ -348,7 +481,24 @@ function CollectionCard({
   }
 
   return (
-    <Card hover className="flex h-full flex-col overflow-hidden">
+    <Card
+      hover
+      className={`group relative flex h-full flex-col overflow-hidden ${selected ? 'border-primary ring-2 ring-primary/30' : ''}`}
+    >
+      {/* 多选复选框 */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle()
+        }}
+        title={selected ? '取消选择' : '加入选择'}
+        className={`absolute right-2.5 top-2.5 z-10 flex h-6 w-6 items-center justify-center rounded-md border-2 transition-all ${
+          selected ? 'border-primary bg-primary text-on-primary' : 'border-border-strong bg-surface/80 opacity-0 group-hover:opacity-100 hover:opacity-100'
+        }`}
+        style={{ opacity: selected ? 1 : undefined }}
+      >
+        {selected && '✓'}
+      </button>
       {/* 预览图（og:image，抓取失败时不显示） */}
       {c.previewImage && (
         <button onClick={onOpen} className="block h-32 w-full overflow-hidden bg-surface-2">
@@ -445,6 +595,7 @@ function CollectionEditorModal({
   const [fetching, setFetching] = useState(false)
   const [duplicate, setDuplicate] = useState<Collection | null>(null)
   const [busy, setBusy] = useState(false)
+  const [renderLimit, setRenderLimit] = useState(60)
 
   useEffect(() => {
     if (!open) return

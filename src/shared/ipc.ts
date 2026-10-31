@@ -95,7 +95,29 @@ export const IPC = {
   DialogOpenFile: 'dialog:open-file',
   DialogSaveFile: 'dialog:save-file',
   DialogPickDirectory: 'dialog:pick-directory',
+  DialogPickFiles: 'dialog:pick-files',
 
   // notifications / toasts from main
-  SystemNotify: 'system:notify'
+  SystemNotify: 'system:notify',
+
+  // ===== 阶段二新增 =====
+  // 全局快速添加（保存）
+  QuickAddSave: 'quickadd:save',
+  // 批量操作
+  CollectionsBatchDelete: 'collections:batch-delete',
+  CollectionsBatchTags: 'collections:batch-tags',
+  CollectionsExportSelected: 'collections:export-selected',
+  FilesBatchAdd: 'files:batch-add',
+  FilesBatchCheck: 'files:batch-check',
+  FilesExportSelected: 'files:export-selected',
+  // 备份中心
+  BackupList: 'backup:list',
+  BackupDelete: 'backup:delete',
+  BackupRunNow: 'backup:run-now',
+  BackupOpenFolder: 'backup:open-folder',
+  BackupVerify: 'backup:verify',
+  // 主进程推送（webContents.send；渲染层经 preload onPush 监听）
+  PushNotification: 'push:notification',
+  // 通知中心
+  NotificationList: 'notification:list'
 } as const

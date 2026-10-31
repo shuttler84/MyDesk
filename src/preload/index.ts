@@ -19,6 +19,22 @@ const api = {
       return Promise.resolve({ ok: false, error: `未知通道：${channel}` })
     }
     return ipcRenderer.invoke(channel, payload) as Promise<IpcEnvelope>
+  },
+  /**
+   * 订阅主进程单向推送（仅允许 push:* 通道）。
+   * 返回取消订阅函数。
+   */
+  onPush(channel: string, callback: (payload: unknown) => void): () => void {
+    if (channel !== 'push:notification') {
+      throw new Error('不允许订阅该通道')
+    }
+    const listener = (_event: unknown, payload: unknown): void => {
+      callback(payload)
+    }
+    ipcRenderer.on(channel, listener as never)
+    return () => {
+      ipcRenderer.removeListener(channel, listener as never)
+    }
   }
 }
 

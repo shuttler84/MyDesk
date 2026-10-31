@@ -33,6 +33,12 @@ export async function runUiTour(win: BrowserWindow): Promise<void> {
   await sleep(3000) // 等待首屏数据加载
   mkdirSync(outDir, { recursive: true })
 
+  // 可用 MYDESK_UI_PAGES="页面1|页面2" 限定页面，MYDESK_UI_THEME 限定单一主题
+  const onlyPages = process.env.MYDESK_UI_PAGES ? process.env.MYDESK_UI_PAGES.split('|') : null
+  const onlyTheme = process.env.MYDESK_UI_THEME ?? null
+  const pages = onlyPages ? PAGES.filter((p) => onlyPages.includes(p)) : PAGES
+  const themes = onlyTheme ? THEMES.filter((t) => t.id === onlyTheme) : THEMES
+
   // 确保窗口真实可见：被遮挡/最小化时 rAF 冻结，动画停在初始帧导致截图空白
   win.webContents.setBackgroundThrottling(false)
   win.setAlwaysOnTop(true, 'screen-saver')
@@ -51,7 +57,7 @@ export async function runUiTour(win: BrowserWindow): Promise<void> {
       })()
     `)
 
-  for (const theme of THEMES) {
+  for (const theme of themes) {
     // 进入 Settings，点击主题按钮（真实 UI 路径，触发 React 状态与持久化）
     await clickNav('设置')
     await sleep(1000)
@@ -69,7 +75,7 @@ export async function runUiTour(win: BrowserWindow): Promise<void> {
     )
     console.log(`[ui-tour] theme ${theme.id}: clicked=${clicked} applied=${applied}`)
 
-    for (const page of PAGES) {
+    for (const page of pages) {
       await clickNav(page)
       // 轮询等待导航激活态与目标页一致（动画/渲染完成后才截图）
       let ok = false
@@ -88,9 +94,22 @@ export async function runUiTour(win: BrowserWindow): Promise<void> {
           break
         }
       }
-      await sleep(700) // 等待过渡动画完全结束
+      await sleep(page === '设置' ? 2000 : 700) // 等待过渡动画完全结束
       const image = await win.webContents.capturePage()
       writeFileSync(join(outDir, `${theme.id}-${page.replace(/\s+/g, '')}.png`), image.toPNG())
+      // 长页面补充底部截图（如设置页的备份中心）
+      const scrolled = await win.webContents.executeJavaScript(
+        `(() => { const m = document.querySelector('main'); if (!m) return false; m.scrollTop = m.scrollHeight; return m.scrollHeight > m.clientHeight })()`
+      )
+      if (scrolled) {
+        await sleep(900)
+        const bottom = await win.webContents.capturePage()
+        writeFileSync(join(outDir, `${theme.id}-${page.replace(/\s+/g, '')}-bottom.png`), bottom.toPNG())
+        await win.webContents.executeJavaScript(
+          `(() => { const m = document.querySelector('main'); if (m) m.scrollTop = 0; return true })()`
+        )
+        await sleep(400)
+      }
       if (!ok) console.log(`[ui-tour] warning: ${theme.id}/${page} active state not confirmed`)
     }
     console.log(`[ui-tour] ${theme.id} pages captured`)

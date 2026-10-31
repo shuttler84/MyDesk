@@ -21,13 +21,16 @@ export const prioritySchema = z.enum(['low', 'medium', 'high'])
 
 // ---------- Tasks ----------
 
+const reminderMinutesSchema = z.number().int().min(0).max(10080).nullable()
+
 export const taskCreateSchema = z.object({
   title: z.string().trim().min(1).max(500),
   notes: z.string().max(10000).optional(),
   priority: prioritySchema.optional(),
   dueDate: localDate.nullable().optional(),
   dueTime: localTime.nullable().optional(),
-  isImportant: z.boolean().optional()
+  isImportant: z.boolean().optional(),
+  reminderMinutes: reminderMinutesSchema.optional()
 })
 
 export const taskUpdateSchema = taskCreateSchema.partial().extend({
@@ -159,7 +162,15 @@ export const settingsPatchSchema = z.object({
     .enum(['dashboard', 'tasks', 'collections', 'vault', 'files', 'notes', 'timeline', 'settings'])
     .optional(),
   vaultAutoLockMinutes: z.number().int().min(1).max(1440).optional(),
-  clipboardClearSeconds: z.number().int().min(5).max(600).optional()
+  clipboardClearSeconds: z.number().int().min(5).max(600).optional(),
+  trayCloseBehavior: z.enum(['ask', 'tray', 'exit']).optional(),
+  launchOnStartup: z.boolean().optional(),
+  autoBackupEnabled: z.boolean().optional(),
+  autoBackupFrequency: z.enum(['daily', 'weekly']).optional(),
+  autoBackupKeepCount: z.number().int().min(1).max(100).optional(),
+  quietStart: localTime.nullable().optional(),
+  quietEnd: localTime.nullable().optional(),
+  defaultReminderMinutes: reminderMinutesSchema.optional()
 })
 
 // ---------- Filter / search ----------
@@ -182,4 +193,38 @@ export const backupImportSchema = z.object({ filePath: z.string().min(1).max(102
 export const exportDataSchema = z.object({
   filePath: z.string().min(1).max(1024),
   format: z.enum(['json', 'csv-tasks', 'csv-collections', 'csv-files', 'md-notes'])
+})
+
+// ---------- 批量操作 / 备份中心 / 快速添加（阶段二） ----------
+
+export const idsSchema = z.object({ ids: z.array(idSchema).min(1).max(500) })
+
+export const batchTagsSchema = z.object({
+  ids: z.array(idSchema).min(1).max(500),
+  mode: z.enum(['replace', 'add']),
+  tags: tagsSchema
+})
+
+export const batchAddFilesSchema = z.object({
+  paths: z.array(z.string().trim().min(1).max(1024)).min(1).max(100)
+})
+
+export const exportSelectedSchema = z.object({
+  filePath: z.string().min(1).max(1024),
+  ids: z.array(idSchema).min(1).max(500)
+})
+
+export const backupFileNameSchema = z.object({
+  fileName: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .refine((n) => !n.includes('/') && !n.includes(String.fromCharCode(92)) && n.endsWith('.mydeskpack'), '必须是 .mydeskpack 文件名')
+})
+
+export const quickAddSaveSchema = z.object({
+  kind: z.enum(['task', 'note', 'url', 'github', 'file']),
+  text: z.string().trim().min(1).max(2000),
+  extra: z.string().max(5000).optional()
 })

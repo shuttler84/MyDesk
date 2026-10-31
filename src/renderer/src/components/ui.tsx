@@ -68,33 +68,39 @@ export function Button({
 
 // ---------- 输入 ----------
 
-export function Input({
-  value,
-  onChange,
-  placeholder,
-  type = 'text',
-  className = '',
-  onKeyDown,
-  onBlur,
-  autoFocus,
-  min,
-  max,
-  mono = false
-}: {
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-  type?: string
-  className?: string
-  onKeyDown?: (e: React.KeyboardEvent) => void
-  onBlur?: () => void
-  autoFocus?: boolean
-  min?: number
-  max?: number
-  mono?: boolean
-}) {
+export const Input = React.forwardRef(function Input(
+  {
+    value,
+    onChange,
+    placeholder,
+    type = 'text',
+    className = '',
+    onKeyDown,
+    onBlur,
+    onFocus,
+    autoFocus,
+    min,
+    max,
+    mono = false
+  }: {
+    value: string
+    onChange: (v: string) => void
+    placeholder?: string
+    type?: string
+    className?: string
+    onKeyDown?: (e: React.KeyboardEvent) => void
+    onBlur?: () => void
+    onFocus?: () => void
+    autoFocus?: boolean
+    min?: number
+    max?: number
+    mono?: boolean
+  },
+  ref: React.Ref<HTMLInputElement>
+) {
   return (
     <input
+      ref={ref}
       type={type}
       value={value}
       min={min}
@@ -102,6 +108,7 @@ export function Input({
       autoFocus={autoFocus}
       onKeyDown={onKeyDown}
       onBlur={onBlur}
+      onFocus={onFocus}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       className={`w-full rounded-xl border border-border bg-surface-2 px-3.5 py-2 text-sm text-text placeholder:text-text-3 outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 ${
@@ -109,7 +116,7 @@ export function Input({
       } ${className}`}
     />
   )
-}
+})
 
 export function Textarea({
   value,

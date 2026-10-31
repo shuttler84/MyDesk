@@ -12,6 +12,7 @@ import { NotesPage } from './pages/NotesPage'
 import { TimelinePage } from './pages/TimelinePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { QuickAddModal } from './components/QuickAddModal'
+import { QuickAddWindow } from './QuickAddWindow'
 import type { PageId } from '@shared/types'
 
 const PAGES: Record<PageId, React.ComponentType> = {
@@ -56,6 +57,10 @@ function Shell() {
 }
 
 export default function App() {
+  // 快速添加独立窗口：主进程以 ?window=quickadd 加载同一渲染入口
+  if (new URLSearchParams(window.location.search).get('window') === 'quickadd') {
+    return <QuickAddWindow />
+  }
   return (
     <AppProvider>
       <Shell />

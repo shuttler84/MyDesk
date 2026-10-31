@@ -4,6 +4,7 @@
 **权威实现**位于 `src/database/migrations/`，二者必须保持一致。
 
 - `001_initial_schema.sql` — Schema V1（MyDesk 1.0.0）
+- `002_task_reminders.sql` — Schema V2（MyDesk 1.1.0，任务提醒）
 
 新增迁移时的流程（详见 docs/DATABASE_MIGRATION.md）：
 

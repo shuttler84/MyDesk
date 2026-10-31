@@ -24,6 +24,7 @@ export interface TaskRow {
   completed_at: string | null
   is_important: number
   sort_order: number
+  reminder_minutes: number | null
   created_at: string
   updated_at: string
 }
@@ -40,6 +41,7 @@ export function rowToTask(r: TaskRow): Task {
     completedAt: r.completed_at,
     isImportant: !!r.is_important,
     sortOrder: r.sort_order,
+    reminderMinutes: r.reminder_minutes ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at
   }
@@ -98,8 +100,8 @@ export function createTask(db: DB, input: TaskInput): Task {
   const sortOrder = (minOrder.m ?? 0) - 1
 
   db.prepare(
-    `INSERT INTO tasks (id, title, notes, priority, due_date, due_time, is_important, sort_order, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO tasks (id, title, notes, priority, due_date, due_time, is_important, sort_order, reminder_minutes, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     input.title,
@@ -109,6 +111,7 @@ export function createTask(db: DB, input: TaskInput): Task {
     input.dueTime ?? null,
     input.isImportant ? 1 : 0,
     sortOrder,
+    input.reminderMinutes ?? null,
     now,
     now
   )
@@ -131,6 +134,7 @@ export function updateTask(db: DB, id: string, patch: Partial<TaskInput> & { com
     dueDate: patch.dueDate !== undefined ? patch.dueDate : existing.dueDate,
     dueTime: patch.dueTime !== undefined ? patch.dueTime : existing.dueTime,
     isImportant: patch.isImportant !== undefined ? patch.isImportant : existing.isImportant,
+    reminderMinutes: patch.reminderMinutes !== undefined ? patch.reminderMinutes : existing.reminderMinutes,
     updatedAt: nowIso()
   }
   if (patch.completed !== undefined) {
@@ -138,7 +142,7 @@ export function updateTask(db: DB, id: string, patch: Partial<TaskInput> & { com
     next.completedAt = patch.completed ? nowIso() : null
   }
   db.prepare(
-    `UPDATE tasks SET title=?, notes=?, priority=?, due_date=?, due_time=?, completed=?, completed_at=?, is_important=?, updated_at=?
+    `UPDATE tasks SET title=?, notes=?, priority=?, due_date=?, due_time=?, completed=?, completed_at=?, is_important=?, reminder_minutes=?, updated_at=?
      WHERE id=?`
   ).run(
     next.title,
@@ -149,6 +153,7 @@ export function updateTask(db: DB, id: string, patch: Partial<TaskInput> & { com
     next.completed ? 1 : 0,
     next.completedAt,
     next.isImportant ? 1 : 0,
+    next.reminderMinutes,
     next.updatedAt,
     id
   )

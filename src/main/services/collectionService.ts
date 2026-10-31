@@ -186,3 +186,71 @@ export function allTags(db: DB): string[] {
   }
   return [...set].sort()
 }
+
+// ---------- 批量操作（阶段二） ----------
+
+/** 批量删除收藏，返回实际删除数量 */
+export function deleteManyCollections(db: DB, ids: string[]): number {
+  const stmt = db.prepare(`DELETE FROM collections WHERE id = ?`)
+  let n = 0
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    for (const id of ids) {
+      n += Number(stmt.run(id).changes)
+    }
+    db.exec('COMMIT')
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK')
+    } catch {
+      /* ignore */
+    }
+    throw err
+  }
+  return n
+}
+
+/** 批量修改标签：replace 替换全部；add 追加（去重） */
+export function setManyTags(db: DB, ids: string[], mode: 'replace' | 'add', tags: string[]): number {
+  const get = db.prepare(`SELECT tags FROM collections WHERE id = ?`)
+  const upd = db.prepare(`UPDATE collections SET tags = ?, updated_at = ? WHERE id = ?`)
+  const now = nowIso()
+  let n = 0
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    for (const id of ids) {
+      const row = get.get(id) as { tags: string } | undefined
+      if (!row) continue
+      let current: string[] = []
+      try {
+        const parsed = JSON.parse(row.tags)
+        if (Array.isArray(parsed)) current = parsed.filter((t) => typeof t === 'string')
+      } catch {
+        current = []
+      }
+      const next =
+        mode === 'replace' ? [...tags] : [...new Set([...current, ...tags])]
+      n += Number(upd.run(JSON.stringify(next), now, id).changes)
+    }
+    db.exec('COMMIT')
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK')
+    } catch {
+      /* ignore */
+    }
+    throw err
+  }
+  return n
+}
+
+/** 按选中 ID 取收藏（保持传入顺序），用于批量导出 */
+export function getByIds(db: DB, ids: string[]): Collection[] {
+  const stmt = db.prepare(`SELECT * FROM collections WHERE id = ?`)
+  const out: Collection[] = []
+  for (const id of ids) {
+    const row = stmt.get(id) as CollectionRow | undefined
+    if (row) out.push(rowToCollection(row))
+  }
+  return out
+}
