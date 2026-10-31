@@ -48,6 +48,8 @@ export interface AppSettings {
   quietEnd: string | null
   /** 默认提醒策略：null=不提醒；0=到期时；N=提前 N 分钟 */
   defaultReminderMinutes: number | null
+  /** 浏览器扩展本地服务（V3） */
+  extensionEnabled: boolean
 }
 
 export type PageId =
@@ -58,6 +60,7 @@ export type PageId =
   | 'files'
   | 'notes'
   | 'timeline'
+  | 'data'
   | 'settings'
 
 // ---------- Tasks ----------
@@ -139,9 +142,36 @@ export interface Collection {
   researchStatus: ResearchStatus
   favicon: string | null
   previewImage: string | null
+  /** 自定义分组（V3），null = 未分组 */
+  groupId: string | null
   createdAt: string
   updatedAt: string
 }
+
+export interface CollectionGroup {
+  id: ID
+  name: string
+  sortOrder: number
+  createdAt: string
+}
+
+export interface CollectionHistoryEntry {
+  id: ID
+  collectionId: ID
+  changedAt: string
+  /** 修改前的完整快照 */
+  snapshot: Collection
+}
+
+export interface CollectionStats {
+  total: number
+  byType: Array<{ type: string; count: number }>
+  byStatus: Array<{ status: string; count: number }>
+  topTags: Array<{ tag: string; count: number }>
+  duplicates: Array<{ url: string; count: number }>
+}
+
+export type CollectionSortBy = 'created_desc' | 'created_asc' | 'updated_desc' | 'name_asc' | 'importance'
 
 export interface CollectionInput {
   name: string
@@ -152,6 +182,8 @@ export interface CollectionInput {
   tags?: string[]
   importance?: Priority
   researchStatus?: ResearchStatus
+  /** 自定义分组（V3） */
+  groupId?: string | null
 }
 
 /** 粘贴 URL 后由主进程抓取的网页元数据（内容仅作为数据处理，绝不作为指令执行） */
@@ -178,8 +210,68 @@ export interface FileIndexItem {
   tags: string[]
   lastCheckedAt: string | null
   isInvalid: boolean
+  /** 来源设备标识（V3）：windows 路径仅原设备有效，跨平台时保留为历史索引 */
+  originDevice: string
   createdAt: string
   updatedAt: string
+}
+
+export interface FileIndexStats {
+  total: number
+  totalSize: number
+  invalidCount: number
+  byType: Array<{ fileType: string; count: number; size: number }>
+  recentAdded: number
+  duplicatePaths: string[]
+}
+
+export interface ScanOptions {
+  directory: string
+  extensions: string[]
+  /** 最大深度，0 = 仅该目录 */
+  maxDepth: number
+  /** 扫描文件数量上限（安全限制） */
+  maxFiles: number
+}
+
+export interface ScanProgress {
+  scanned: number
+  matched: number
+  currentDir: string
+  finished: boolean
+  cancelled: boolean
+}
+
+export interface ScanResult {
+  files: Array<{ path: string; name: string; fileType: string; size: number }>
+  cancelled: boolean
+}
+
+// ---------- 数据管理中心 ----------
+
+export interface DatabaseIntegrityReport {
+  integrity: 'ok' | 'failed'
+  message: string
+  foreignKeyViolations: number
+  schemaVersion: number
+  migrations: Array<{ id: string; fromVersion: number; toVersion: number; executedAt: string; description: string }>
+}
+
+// ---------- Timeline 阶段三 ----------
+
+export interface MonthlyTaskStat {
+  month: string // YYYY-MM
+  completed: number
+}
+
+export interface TypeDistribution {
+  type: string
+  count: number
+}
+
+export interface TagUsage {
+  tag: string
+  count: number
 }
 
 export interface FileCheckResult {
@@ -293,6 +385,10 @@ export interface TimelineStats {
   notes: DailyCount[]
   files: DailyCount[]
   activities: TimelineActivity[]
+  /** 阶段三扩展 */
+  monthlyTasks: MonthlyTaskStat[]
+  typeDistribution: TypeDistribution[]
+  tagUsage: TagUsage[]
 }
 
 // ---------- Dashboard ----------

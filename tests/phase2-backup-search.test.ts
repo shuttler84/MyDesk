@@ -73,9 +73,11 @@ describe('backup v1 format compatibility', () => {
     // （更真实的做法：从零应用 001，然后造数据）
     tasks.createTask(db, { title: '旧版任务', priority: 'high' })
     collections.createCollection(db, { name: '旧版收藏', url: 'https://example.com' })
-    // 撤销 002 迁移（仅测试环境）：删除新结构并把版本写回 1
+    // 撤销 002/003 迁移（仅测试环境）：删除新结构并把版本写回 1
     db.exec(`DROP TABLE reminder_log`)
-    db.exec(`DELETE FROM migration_history WHERE migration_id = '002_task_reminders'`)
+    db.exec(`DROP TABLE collection_history`)
+    db.exec(`DROP TABLE collection_groups`)
+    db.exec(`DELETE FROM migration_history WHERE migration_id IN ('002_task_reminders', '003_collection_groups_history')`)
     // SQLite 不支持 DROP COLUMN（旧版）；新列 reminder_minutes 保留在表中不影响——
     // 为严格模拟 1.0.x，重建 tasks 表去掉该列
     db.exec(`
@@ -83,6 +85,18 @@ describe('backup v1 format compatibility', () => {
         completed_at, is_important, sort_order, created_at, updated_at FROM tasks;
       DROP TABLE tasks;
       ALTER TABLE tasks_v1 RENAME TO tasks;
+    `)
+    db.exec(`
+      CREATE TABLE col_v1 AS SELECT id, name, url, type, description, note, tags, importance,
+        research_status, favicon, preview_image, created_at, updated_at FROM collections;
+      DROP TABLE collections;
+      ALTER TABLE col_v1 RENAME TO collections;
+    `)
+    db.exec(`
+      CREATE TABLE fi_v1 AS SELECT id, name, path, file_type, size, version, notes, tags,
+        last_checked_at, is_invalid, created_at, updated_at FROM file_index;
+      DROP TABLE file_index;
+      ALTER TABLE fi_v1 RENAME TO file_index;
     `)
     db.exec(`PRAGMA user_version = 1`)
     vacuumSnapshot(db, join(srcDir, 'check.sqlite'))
@@ -121,7 +135,7 @@ describe('backup v1 format compatibility', () => {
 
     // 恢复后的数据库应已迁移到 V2，且旧数据完整（importBackup 会替换底层连接）
     const db3 = ctx2.db
-    expect(getUserVersion(db3)).toBe(2)
+    expect(getUserVersion(db3)).toBe(3)
     const t = tasks.listTasks(db3, { view: 'all' })
     expect(t).toHaveLength(1)
     expect(t[0].title).toBe('旧版任务')

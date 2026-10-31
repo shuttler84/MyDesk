@@ -17,7 +17,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoBackupKeepCount: 10,
   quietStart: null,
   quietEnd: null,
-  defaultReminderMinutes: null
+  defaultReminderMinutes: null,
+  extensionEnabled: false
 }
 
 const SETTING_KEYS = [
@@ -33,7 +34,8 @@ const SETTING_KEYS = [
   'autoBackupKeepCount',
   'quietStart',
   'quietEnd',
-  'defaultReminderMinutes'
+  'defaultReminderMinutes',
+  'extensionEnabled'
 ] as const
 
 function coerce<K extends keyof AppSettings>(key: K, raw: string | undefined): AppSettings[K] {
@@ -69,7 +71,8 @@ export function getSettings(db: DB): AppSettings {
     quietEnd: (map.get('quietEnd') !== undefined ? coerce('quietEnd', map.get('quietEnd')) : null) as string | null,
     defaultReminderMinutes: (map.get('defaultReminderMinutes') !== undefined
       ? coerce('defaultReminderMinutes', map.get('defaultReminderMinutes'))
-      : null) as number | null
+      : null) as number | null,
+    extensionEnabled: coerce('extensionEnabled', map.get('extensionEnabled')) as boolean
   }
 }
 

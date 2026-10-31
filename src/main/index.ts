@@ -25,6 +25,7 @@ import { createTray, destroyTray } from './tray'
 import { registerQuickAddShortcut, unregisterQuickAddShortcut, createOrShowQuickAdd, hideQuickAdd } from './quickAdd'
 import { startReminderScheduler } from './reminderScheduler'
 import { autoBackupIfDue } from './services/backupService'
+import { ExtensionServer } from './services/extensionServer'
 import { getSettings, updateSettings } from './services/settingsService'
 import { isInQuietHours } from '@shared/reminder'
 
@@ -226,13 +227,17 @@ app.whenReady().then(() => {
 
   vault = new VaultManager()
   notifications = new NotificationCenter()
+  const extensionServer = new ExtensionServer()
   notify = createNotifier(notifications, () => {
     if (!ctx) return false
     const s = getSettings(ctx.db)
     return isInQuietHours(new Date(), s.quietStart, s.quietEnd)
   })
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  registerAllIpc(ctx!, vault!, { notifications: notifications!, hideQuickAdd })
+  registerAllIpc(ctx!, vault!, { notifications: notifications!, hideQuickAdd, extensionServer })
+  if (getSettings(ctx!.db).extensionEnabled) {
+    extensionServer.start(ctx!)
+  }
   setupBackgroundServices()
 
   // 开机启动（按设置）
@@ -300,6 +305,14 @@ app.whenReady().then(() => {
     mainWindow?.webContents.once('did-finish-load', () => {
       void import('./e2eProbe').then(({ runE2EProbe }) => {
         if (mainWindow) void runE2EProbe(mainWindow)
+      })
+    })
+  }
+  // 验收辅助：MYDESK_E2E3=1 时验证阶段三（扩展本地服务安全 + V3 数据）
+  if (process.env.MYDESK_E2E3) {
+    mainWindow?.webContents.once('did-finish-load', () => {
+      void import('./e2eProbe3').then(({ runE2EProbe3 }) => {
+        if (mainWindow) void runE2EProbe3(mainWindow)
       })
     })
   }

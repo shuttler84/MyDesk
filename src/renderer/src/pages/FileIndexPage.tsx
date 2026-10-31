@@ -16,7 +16,7 @@ import {
   FileWarning,
   FolderOpen
 } from 'lucide-react'
-import type { FileIndexItem } from '@shared/types'
+import type { FileIndexItem, FileIndexStats } from '@shared/types'
 import { api, type FileFilterLike } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { ProgressBar, 
@@ -53,12 +53,22 @@ export function FileIndexPage() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<FileIndexItem | null>(null)
   const [renderLimit, setRenderLimit] = useState(60)
+  const [stats, setStats] = useState<FileIndexStats | null>(null)
+  const [showStats, setShowStats] = useState(false)
+  const [scanOpen, setScanOpen] = useState(false)
+  const [scanDir, setScanDir] = useState('')
+  const [scanExts, setScanExts] = useState('pdf, docx, xlsx, pptx, zip')
+  const [scanDepth, setScanDepth] = useState(2)
+  const [scanning, setScanning] = useState(false)
+  const [scanResult, setScanResult] = useState<Array<{ path: string; name: string; fileType: string; size: number }>>([])
+  const [scanCancelled, setScanCancelled] = useState(false)
 
   const load = useCallback(async () => {
     const filter: FileFilterLike = { search, fileType }
     try {
       setItems(await api.files.list(filter))
       setAllTypes(await api.files.types())
+      setStats(await api.filesV3.stats())
     } catch (err) {
       toast('error', err instanceof Error ? err.message : '加载文件索引失败')
     }
@@ -152,6 +162,79 @@ export function FileIndexPage() {
     }
   }
 
+  const runScan = async () => {
+    if (!scanDir.trim()) return
+    setScanning(true)
+    setScanResult([])
+    setScanCancelled(false)
+    try {
+      const exts = scanExts
+        .split(/[,，]/)
+        .map((x) => x.trim())
+        .filter(Boolean)
+      const res = await api.filesV3.scan({
+        directory: scanDir.trim(),
+        extensions: exts,
+        maxDepth: scanDepth,
+        maxFiles: 2000
+      })
+      setScanResult(res.files)
+      setScanCancelled(res.cancelled)
+      toast('info', '扫描完成：' + res.files.length + ' 个文件' + (res.cancelled ? '（已取消）' : ''))
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '扫描失败')
+    } finally {
+      setScanning(false)
+    }
+  }
+
+  const commitScan = async () => {
+    if (scanResult.length === 0) return
+    try {
+      const res = await api.filesV3.commit(scanResult.map((f) => f.path))
+      toast('success', '已添加 ' + res.added.length + ' 条' + (res.failed.length > 0 ? '，跳过 ' + res.failed.length + ' 条（重复/失效）' : ''))
+      setScanOpen(false)
+      setScanResult([])
+      await load()
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '添加失败')
+    }
+  }
+
+  const importCsv = async () => {
+    try {
+      const target = await api.dialog.openFile()
+      if (!target) return
+      const res = await api.filesV3.importCsvAt(target)
+      toast('success', '导入 ' + res.imported + ' 条，跳过 ' + res.skipped + ' 条' + (res.errors.length > 0 ? '，' + res.errors.length + ' 条错误' : ''))
+      await load()
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '导入失败')
+    }
+  }
+
+  const cleanupInvalid = async () => {
+    try {
+      const res = await api.filesV3.cleanupInvalid()
+      if (res.invalid.length === 0) {
+        toast('success', '没有失效路径，索引很干净')
+        return
+      }
+      if (!window.confirm('发现 ' + res.invalid.length + ' 条失效路径，确认把它们从索引移除吗？（不会触碰磁盘文件）')) return
+      for (const item of res.invalid) {
+        try {
+          await api.files.remove(item.id)
+        } catch {
+          /* 忽略单条失败 */
+        }
+      }
+      toast('success', '已移除 ' + res.invalid.length + ' 条失效记录')
+      await load()
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '清理失败')
+    }
+  }
+
   const checkItem = async (item: FileIndexItem) => {
     try {
       const { result } = await api.files.check(item.id)
@@ -217,6 +300,24 @@ export function FileIndexPage() {
         <Button onClick={() => void batchAdd()}>
           <Plus size={16} /> 批量添加
         </Button>
+        <Button className="text-xs" onClick={() => void importCsv()}>
+          导入 CSV
+        </Button>
+        <Button
+          className="text-xs"
+          onClick={() => {
+            setScanOpen(true)
+            setScanResult([])
+          }}
+        >
+          目录扫描
+        </Button>
+        <Button className="text-xs" onClick={() => setShowStats((v) => !v)}>
+          统计
+        </Button>
+        <Tag active={false} className="!cursor-pointer" onClick={() => void cleanupInvalid()}>
+          失效清理建议
+        </Tag>
         <Button variant="primary" onClick={() => void addByPath()}>
           <Plus size={16} /> 索引文件
         </Button>
@@ -237,6 +338,30 @@ export function FileIndexPage() {
         />
       ) : (
         <div className="flex flex-col gap-2.5">
+          {/* 统计面板 */}
+          {showStats && stats && (
+            <Card className="p-4">
+              <div className="mb-3 flex flex-wrap gap-4 text-xs text-text-2">
+                <span>共 <b className="text-text">{stats.total}</b> 条</span>
+                <span>总大小 <b className="text-text">{formatSize(stats.totalSize)}</b></span>
+                <span>失效 <b className="text-danger">{stats.invalidCount}</b> 条</span>
+                <span>最近 7 天新增 <b className="text-text">{stats.recentAdded}</b> 条</span>
+                {stats.duplicatePaths.length > 0 && <span className="text-warning">⚠ 重复路径 {stats.duplicatePaths.length} 组</span>}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {stats.byType.slice(0, 8).map((t) => (
+                  <div key={t.fileType} className="flex items-center gap-2 text-xs">
+                    <span className="w-14 font-mono uppercase text-text-2">{t.fileType}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-3">
+                      <div className="h-full bg-success" style={{ width: (t.count / Math.max(stats.total, 1)) * 100 + '%' }} />
+                    </div>
+                    <span className="w-8 text-right font-mono">{t.count}</span>
+                    <span className="w-20 text-right text-text-3">{formatSize(t.size)}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
           {/* 批量检查进度 */}
           {batchProgress && (
             <Card className="flex items-center gap-3 px-4 py-3">
@@ -308,6 +433,64 @@ export function FileIndexPage() {
           </Button>
         </div>
       )}
+
+      {/* 目录扫描 */}
+      <Modal open={scanOpen} onClose={() => setScanOpen(false)} title="目录扫描（可选功能）" wide>
+        <p className="mb-3 text-xs leading-5 text-text-3">
+          由你主动选择目录并授权扫描；只读取文件名与大小等元信息，绝不修改、移动或删除文件。结果先预览，确认后才加入索引。
+        </p>
+        <Field label="扫描目录">
+          <div className="flex gap-2">
+            <Input value={scanDir} onChange={setScanDir} placeholder="例如 C:\Users\you\Documents" mono />
+            <Button
+              onClick={async () => {
+                const dir = await api.dialog.pickDirectory()
+                if (dir) setScanDir(dir)
+              }}
+            >
+              选择
+            </Button>
+          </div>
+        </Field>
+        <div className="mb-3 grid grid-cols-2 gap-3">
+          <Field label="文件类型（逗号分隔，留空 = 全部）">
+            <Input value={scanExts} onChange={setScanExts} placeholder="pdf, docx" />
+          </Field>
+          <Field label="扫描深度（0 = 仅该目录）">
+            <Input
+              type="number"
+              min={0}
+              max={10}
+              value={String(scanDepth)}
+              onChange={(v) => {
+                const n = parseInt(v, 10)
+                if (!Number.isNaN(n) && n >= 0 && n <= 10) setScanDepth(n)
+              }}
+            />
+          </Field>
+        </div>
+        <div className="mb-3 flex gap-2">
+          <Button variant="primary" disabled={!scanDir.trim() || scanning} onClick={() => void runScan()}>
+            {scanning ? '扫描中…' : '开始扫描'}
+          </Button>
+          {scanResult.length > 0 && (
+            <Button variant="primary" onClick={() => void commitScan()}>
+              将 {scanResult.length} 个文件加入索引
+            </Button>
+          )}
+          {scanCancelled && <span className="self-center text-xs text-warning">扫描已被取消</span>}
+        </div>
+        {scanResult.length > 0 && (
+          <div className="max-h-64 overflow-y-auto rounded-xl border border-border">
+            {scanResult.map((f) => (
+              <div key={f.path} className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5 text-xs last:border-0">
+                <span className="min-w-0 flex-1 truncate text-text">{f.name}</span>
+                <span className="shrink-0 font-mono text-text-3">{formatSize(f.size)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
 
       <FileEditorModal
         open={editorOpen}

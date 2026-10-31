@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        width: 340px; margin: 0; padding: 14px;
+        font-family: 'Segoe UI', 'Microsoft YaHei UI', sans-serif;
+        background: #f4faf7; color: #26322e; font-size: 13px;
+      }
+      h1 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+      h1 .logo { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(135deg,#40916c,#d6eee3); display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 11px; }
+      label { display: block; margin: 8px 0 4px; font-weight: 600; font-size: 12px; color: #5a6862; }
+      input, textarea, select {
+        width: 100%; padding: 7px 9px; border: 1px solid #d5e5de; border-radius: 8px;
+        background: #fff; font-size: 13px; outline: none; box-sizing: border-box;
+      }
+      input:focus, textarea:focus, select:focus { border-color: #40916c; }
+      textarea { resize: vertical; min-height: 44px; }
+      .row { display: flex; gap: 8px; }
+      .row > * { flex: 1; }
+      button {
+        width: 100%; margin-top: 12px; padding: 9px; border: 0; border-radius: 8px;
+        background: #40916c; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+      }
+      button:disabled { opacity: .6; cursor: default; }
+      #status { margin-top: 8px; min-height: 18px; font-size: 12px; text-align: center; }
+      #status.ok { color: #2e7d5c; }
+      #status.err { color: #c75854; }
+      .url { color: #8c9892; font-size: 11px; word-break: break-all; margin: 2px 0 6px; }
+      .hint { color: #8c9892; font-size: 11px; margin-top: 8px; text-align: center; }
+      a { color: #40916c; }
+    </style>
+  </head>
+  <body>
+    <h1><span class="logo">M</span> 收藏到 MyDesk</h1>
+    <label>标题</label>
+    <input id="title" />
+    <div class="url" id="url"></div>
+    <label>描述</label>
+    <textarea id="description"></textarea>
+    <div class="row">
+      <div>
+        <label>分组</label>
+        <select id="group"><option value="">未分组</option></select>
+      </div>
+      <div>
+        <label>标签（逗号分隔）</label>
+        <input id="tags" placeholder="前端, 教程" />
+      </div>
+    </div>
+    <label>个人备注</label>
+    <textarea id="note"></textarea>
+    <button id="save">保存到 MyDesk</button>
+    <div id="status"></div>
+    <div class="hint">未连接？<a href="options.html" target="_blank">配置地址与令牌</a></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

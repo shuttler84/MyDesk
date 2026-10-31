@@ -3,7 +3,16 @@
  */
 import { randomUUID } from 'crypto'
 import type { DB } from '@database/connection'
-import type { Collection, CollectionInput, CollectionType, Priority, ResearchStatus } from '@shared/types'
+import type {
+  Collection,
+  CollectionGroup,
+  CollectionHistoryEntry,
+  CollectionInput,
+  CollectionStats,
+  CollectionType,
+  Priority,
+  ResearchStatus
+} from '@shared/types'
 import { nowIso } from '@shared/datetime'
 
 export interface CollectionRow {
@@ -18,6 +27,7 @@ export interface CollectionRow {
   research_status: ResearchStatus
   favicon: string | null
   preview_image: string | null
+  group_id: string | null
   created_at: string
   updated_at: string
 }
@@ -42,6 +52,7 @@ export function rowToCollection(r: CollectionRow): Collection {
     researchStatus: r.research_status,
     favicon: r.favicon,
     previewImage: r.preview_image,
+    groupId: r.group_id ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at
   }
@@ -104,8 +115,8 @@ export function createCollection(db: DB, input: CollectionInput): Collection {
   const now = nowIso()
   const id = randomUUID()
   db.prepare(
-    `INSERT INTO collections (id, name, url, type, description, note, tags, importance, research_status, favicon, preview_image, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO collections (id, name, url, type, description, note, tags, importance, research_status, favicon, preview_image, group_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     input.name,
@@ -118,6 +129,7 @@ export function createCollection(db: DB, input: CollectionInput): Collection {
     input.researchStatus ?? 'unresearched',
     null,
     null,
+    (input as { groupId?: string | null }).groupId ?? null,
     now,
     now
   )
@@ -130,12 +142,21 @@ export function getCollection(db: DB, id: string): Collection {
   return rowToCollection(row)
 }
 
+/** 阶段三 collectionService 追加代码 —— 脚本插入用 */
+
 export function updateCollection(
   db: DB,
   id: string,
-  patch: Partial<CollectionInput> & { favicon?: string | null; previewImage?: string | null }
+  patch: Partial<CollectionInput> & { favicon?: string | null; previewImage?: string | null; groupId?: string | null }
 ): Collection {
   const existing = getCollection(db, id)
+  // 修改历史：写入修改前的完整快照（V3）
+  db.prepare(`INSERT INTO collection_history (id, collection_id, changed_at, snapshot) VALUES (?, ?, ?, ?)`).run(
+    randomUUID(),
+    id,
+    nowIso(),
+    JSON.stringify(existing)
+  )
   const next = {
     name: patch.name ?? existing.name,
     url: patch.url ?? existing.url,
@@ -146,10 +167,11 @@ export function updateCollection(
     importance: patch.importance ?? existing.importance,
     researchStatus: patch.researchStatus ?? existing.researchStatus,
     favicon: patch.favicon !== undefined ? patch.favicon : existing.favicon,
-    previewImage: patch.previewImage !== undefined ? patch.previewImage : existing.previewImage
+    previewImage: patch.previewImage !== undefined ? patch.previewImage : existing.previewImage,
+    groupId: patch.groupId !== undefined ? patch.groupId : existing.groupId
   }
   db.prepare(
-    `UPDATE collections SET name=?, url=?, type=?, description=?, note=?, tags=?, importance=?, research_status=?, favicon=?, preview_image=?, updated_at=?
+    `UPDATE collections SET name=?, url=?, type=?, description=?, note=?, tags=?, importance=?, research_status=?, favicon=?, preview_image=?, group_id=?, updated_at=?
      WHERE id=?`
   ).run(
     next.name,
@@ -162,10 +184,168 @@ export function updateCollection(
     next.researchStatus,
     next.favicon,
     next.previewImage,
+    next.groupId,
     nowIso(),
     id
   )
   return getCollection(db, id)
+}
+
+// ---------- 阶段三：分组 / 排序 / 筛选 / 统计 / 历史 ----------
+
+/** 按分组筛选：'all' = 全部，null = 未分组 */
+export function filterByGroup(list: Collection[], groupId: string | null | 'all'): Collection[] {
+  if (groupId === 'all' || groupId === undefined) return list
+  return list.filter((c) => c.groupId === groupId)
+}
+
+/** 高级排序 */
+export function sortCollections(list: Collection[], sortBy: string): Collection[] {
+  const importanceRank: Record<string, number> = { high: 0, medium: 1, low: 2 }
+  const sorted = [...list]
+  switch (sortBy) {
+    case 'created_asc':
+      return sorted.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
+    case 'updated_desc':
+      return sorted.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1))
+    case 'name_asc':
+      return sorted.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+    case 'importance':
+      return sorted.sort(
+        (a, b) => importanceRank[a.importance] - importanceRank[b.importance] || (a.createdAt < b.createdAt ? 1 : -1)
+      )
+    case 'created_desc':
+    default:
+      return sorted.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1))
+  }
+}
+
+/** 标签组合筛选：and=同时包含全部，or=包含任一 */
+export function filterByTagsMode(list: Collection[], tags: string[], mode: 'and' | 'or'): Collection[] {
+  if (tags.length === 0) return list
+  return list.filter((c) =>
+    mode === 'and' ? tags.every((t) => c.tags.includes(t)) : tags.some((t) => c.tags.includes(t))
+  )
+}
+
+/** 重复 URL 清单 */
+export function findDuplicateUrls(db: DB): Array<{ url: string; count: number }> {
+  const rows = db
+    .prepare(`SELECT url, COUNT(*) AS c FROM collections GROUP BY url HAVING c >= 2 ORDER BY c DESC, url`)
+    .all() as Array<{ url: string; c: number }>
+  return rows.map((r) => ({ url: r.url, count: Number(r.c) }))
+}
+
+/** 相似收藏提醒：同域名条目数 */
+export function findSimilarCollections(db: DB): Array<{ host: string; count: number }> {
+  const rows = db.prepare(`SELECT url FROM collections`).all() as Array<{ url: string }>
+  const hosts = new Map<string, number>()
+  for (const r of rows) {
+    try {
+      const u = new URL(r.url)
+      const key = u.hostname.replace(/^www\./, '')
+      hosts.set(key, (hosts.get(key) ?? 0) + 1)
+    } catch {
+      /* ignore */
+    }
+  }
+  return [...hosts.entries()]
+    .filter(([, c]) => c >= 2)
+    .map(([host, count]) => ({ host, count }))
+    .sort((a, b) => b.count - a.count)
+}
+
+/** 收藏数据统计 */
+export function collectionStats(db: DB): CollectionStats {
+  const total = Number((db.prepare(`SELECT COUNT(*) AS c FROM collections`).get() as { c: number }).c)
+  const byType = (
+    db.prepare(`SELECT type, COUNT(*) AS c FROM collections GROUP BY type ORDER BY c DESC`).all() as Array<{
+      type: string
+      c: number
+    }>
+  ).map((r) => ({ type: r.type, count: Number(r.c) }))
+  const byStatus = (
+    db
+      .prepare(`SELECT research_status AS status, COUNT(*) AS c FROM collections GROUP BY research_status`)
+      .all() as Array<{ status: string; c: number }>
+  ).map((r) => ({ status: r.status, count: Number(r.c) }))
+  const tagRows = db.prepare(`SELECT tags FROM collections`).all() as Array<{ tags: string }>
+  const tagCount = new Map<string, number>()
+  for (const r of tagRows) {
+    try {
+      const parsed = JSON.parse(r.tags)
+      if (Array.isArray(parsed)) {
+        for (const t of parsed) {
+          if (typeof t === 'string') tagCount.set(t, (tagCount.get(t) ?? 0) + 1)
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  const topTags = [...tagCount.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20)
+  return { total, byType, byStatus, topTags, duplicates: findDuplicateUrls(db) }
+}
+
+/** 收藏修改历史（倒序） */
+export function getCollectionHistory(db: DB, collectionId: string, limit = 50): CollectionHistoryEntry[] {
+  const rows = db
+    .prepare(
+      `SELECT id, collection_id, changed_at, snapshot FROM collection_history
+       WHERE collection_id = ? ORDER BY changed_at DESC, rowid DESC LIMIT ?`
+    )
+    .all(collectionId, limit) as Array<{ id: string; collection_id: string; changed_at: string; snapshot: string }>
+  return rows.map((r) => ({
+    id: r.id,
+    collectionId: r.collection_id,
+    changedAt: r.changed_at,
+    snapshot: JSON.parse(r.snapshot) as Collection
+  }))
+}
+
+export function listGroups(db: DB): CollectionGroup[] {
+  const rows = db
+    .prepare(`SELECT * FROM collection_groups ORDER BY sort_order ASC, created_at ASC`)
+    .all() as Array<Record<string, unknown>>
+  return rows.map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    sortOrder: Number(r.sort_order),
+    createdAt: String(r.created_at)
+  }))
+}
+
+export function createGroup(db: DB, name: string): CollectionGroup {
+  const id = randomUUID()
+  const createdAt = nowIso()
+  db.prepare(`INSERT INTO collection_groups (id, name, sort_order, created_at) VALUES (?, ?, ?, ?)`).run(
+    id,
+    name,
+    Date.now(),
+    createdAt
+  )
+  return { id, name, sortOrder: Date.now(), createdAt }
+}
+
+export function updateGroup(db: DB, id: string, patch: { name?: string; sortOrder?: number }): void {
+  const existing = db.prepare(`SELECT * FROM collection_groups WHERE id = ?`).get(id) as
+    | { name: string; sort_order: number }
+    | undefined
+  if (!existing) throw new Error('分组不存在')
+  db.prepare(`UPDATE collection_groups SET name = ?, sort_order = ? WHERE id = ?`).run(
+    patch.name ?? existing.name,
+    patch.sortOrder ?? existing.sort_order,
+    id
+  )
+}
+
+/** 删除分组：组内收藏变为未分组（ON DELETE SET NULL） */
+export function deleteGroup(db: DB, id: string): void {
+  const res = db.prepare(`DELETE FROM collection_groups WHERE id = ?`).run(id)
+  if (Number(res.changes) === 0) throw new Error('分组不存在')
 }
 
 export function deleteCollection(db: DB, id: string): void {

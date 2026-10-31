@@ -20,9 +20,19 @@ import {
   MessageSquare,
   FileText,
   Link2,
-  Bookmark
+  Bookmark,
+  History
 } from 'lucide-react'
-import type { Collection, CollectionInput, CollectionType, Priority, ResearchStatus } from '@shared/types'
+import type {
+  Collection,
+  CollectionGroup,
+  CollectionHistoryEntry,
+  CollectionInput,
+  CollectionStats,
+  CollectionType,
+  Priority,
+  ResearchStatus
+} from '@shared/types'
 import { api, type CollectionFilterLike } from '../api/client'
 import { useApp } from '../store/AppStore'
 import {
@@ -84,16 +94,38 @@ export function CollectionsPage() {
   const [batchTagsText, setBatchTagsText] = useState('')
   const [busy, setBusy] = useState(false)
   const [renderLimit, setRenderLimit] = useState(60)
+  const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([])
+  const [groupId, setGroupId] = useState<string | 'all' | 'none'>('all')
+  const [sortBy, setSortBy] = useState('created_desc')
+  const [tagMode, setTagMode] = useState<'and' | 'or'>('and')
+  const [stats, setStats] = useState<CollectionStats | null>(null)
+  const [dupInfo, setDupInfo] = useState<{ duplicates: Array<{ url: string; count: number }>; similar: Array<{ host: string; count: number }> } | null>(null)
+  const [showStats, setShowStats] = useState(false)
+  const [historyFor, setHistoryFor] = useState<Collection | null>(null)
+  const [history, setHistory] = useState<CollectionHistoryEntry[]>([])
+  const [groupManageOpen, setGroupManageOpen] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
 
   const load = useCallback(async () => {
-    const filter: CollectionFilterLike = { type, status, tags: selectedTags, search }
+    const filter: CollectionFilterLike & { tagMode?: string; sortBy?: string; groupId?: string | null } = {
+      type,
+      status,
+      tags: selectedTags,
+      search,
+      tagMode,
+      sortBy,
+      groupId: groupId === 'all' ? undefined : groupId === 'none' ? null : groupId
+    }
     try {
       setItems(await api.collections.list(filter))
       setAllTags(await api.collections.tags())
+      setGroups(await api.groups.list())
+      setStats(await api.collectionsV3.stats())
+      setDupInfo(await api.collectionsV3.duplicates())
     } catch (err) {
       toast('error', err instanceof Error ? err.message : '加载收藏失败')
     }
-  }, [type, status, selectedTags, search, toast])
+  }, [type, status, selectedTags, search, tagMode, sortBy, groupId, toast])
 
   useEffect(() => {
     setItems(null)
@@ -126,6 +158,15 @@ export function CollectionsPage() {
 
   const selectAllVisible = () => {
     if (items) setSelected(new Set(items.map((c) => c.id)))
+  }
+
+  const openHistory = async (c: Collection) => {
+    try {
+      setHistory(await api.collectionsV3.history(c.id))
+      setHistoryFor(c)
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '加载历史失败')
+    }
   }
 
   const batchDelete = async () => {
@@ -221,6 +262,32 @@ export function CollectionsPage() {
             { value: 'done', label: '已完成' }
           ]}
         />
+        <Select
+          value={groupId}
+          onChange={(v) => setGroupId(v as typeof groupId)}
+          options={[
+            { value: 'all', label: '全部分组' },
+            { value: 'none', label: '未分组' },
+            ...groups.map((g) => ({ value: g.id, label: '📁 ' + g.name }))
+          ]}
+        />
+        <Select
+          value={sortBy}
+          onChange={setSortBy}
+          options={[
+            { value: 'created_desc', label: '最新创建' },
+            { value: 'created_asc', label: '最早创建' },
+            { value: 'updated_desc', label: '最近修改' },
+            { value: 'name_asc', label: '名称 A→Z' },
+            { value: 'importance', label: '重要程度' }
+          ]}
+        />
+        <Button className="text-xs" onClick={() => setShowStats((v) => !v)}>
+          统计
+        </Button>
+        <Button className="text-xs" onClick={() => setGroupManageOpen(true)}>
+          分组管理
+        </Button>
         <div className="flex overflow-hidden rounded-xl border border-border">
           <button
             onClick={() => setGridView(true)}
@@ -258,9 +325,17 @@ export function CollectionsPage() {
             </Tag>
           ))}
           {selectedTags.length > 0 && (
-            <button className="text-xs text-text-3 underline hover:text-text" onClick={() => setSelectedTags([])}>
-              清除
-            </button>
+            <>
+              <Tag active={tagMode === 'and'} onClick={() => setTagMode('and')}>
+                全部包含
+              </Tag>
+              <Tag active={tagMode === 'or'} onClick={() => setTagMode('or')}>
+                任一包含
+              </Tag>
+              <button className="text-xs text-text-3 underline hover:text-text" onClick={() => setSelectedTags([])}>
+                清除
+              </button>
+            </>
           )}
         </div>
       )}
@@ -279,6 +354,21 @@ export function CollectionsPage() {
           <Button className="text-xs" onClick={() => setBatchTagsOpen(true)}>
             批量修改标签
           </Button>
+          {groups.length > 0 && (
+            <Select
+              className="!py-1 text-xs"
+              value=""
+              onChange={(v) => {
+                if (!v) return
+                void api.collectionsV3.setGroup([...selected], v).then((r) => {
+                  toast('success', '已将 ' + r.updated + ' 条加入分组')
+                  setSelected(new Set())
+                  void load()
+                })
+              }}
+              options={[{ value: '', label: '加入分组…' }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
+            />
+          )}
           <Button className="text-xs" onClick={() => void exportSelected()}>
             导出选中
           </Button>
@@ -326,6 +416,7 @@ export function CollectionsPage() {
                     setEditorOpen(true)
                   }}
                   onDelete={() => void removeItem(c)}
+                  onHistory={() => void openHistory(c)}
                   onChanged={() => void load()}
                 />
               </motion.div>
@@ -358,7 +449,8 @@ export function CollectionsPage() {
               <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                 <RowBtn title="打开" onClick={() => void openInBrowser(c)}><ExternalLink size={14} /></RowBtn>
                 <RowBtn title="复制链接" onClick={() => void copyLink(c)}><Copy size={14} /></RowBtn>
-                <RowBtn title="编辑" onClick={() => { setEditing(c); setEditorOpen(true) }}><Pencil size={14} /></RowBtn>
+                <RowBtn title="修改历史" onClick={() => void openHistory(c)}><History size={14} /></RowBtn>
+                  <RowBtn title="编辑" onClick={() => { setEditing(c); setEditorOpen(true) }}><Pencil size={14} /></RowBtn>
                 <RowBtn title="删除" danger onClick={() => void removeItem(c)}><Trash2 size={14} /></RowBtn>
               </div>
             </Card>
@@ -456,6 +548,7 @@ function CollectionCard({
   onCopy,
   onEdit,
   onDelete,
+  onHistory,
   onChanged
 }: {
   c: Collection
@@ -465,6 +558,7 @@ function CollectionCard({
   onCopy: () => void
   onEdit: () => void
   onDelete: () => void
+  onHistory: () => void
   onChanged: () => void
 }) {
   const { toast } = useApp()
@@ -567,6 +661,7 @@ function CollectionCard({
           <div className="flex gap-0.5">
             <RowBtn title="在浏览器打开" onClick={onOpen}><ExternalLink size={14} /></RowBtn>
             <RowBtn title="复制链接" onClick={onCopy}><Copy size={14} /></RowBtn>
+            <RowBtn title="修改历史" onClick={onHistory}><History size={14} /></RowBtn>
             <RowBtn title="编辑" onClick={onEdit}><Pencil size={14} /></RowBtn>
             <RowBtn title="删除" danger onClick={onDelete}><Trash2 size={14} /></RowBtn>
           </div>
@@ -596,6 +691,17 @@ function CollectionEditorModal({
   const [duplicate, setDuplicate] = useState<Collection | null>(null)
   const [busy, setBusy] = useState(false)
   const [renderLimit, setRenderLimit] = useState(60)
+  const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([])
+  const [groupId, setGroupId] = useState<string | 'all' | 'none'>('all')
+  const [sortBy, setSortBy] = useState('created_desc')
+  const [tagMode, setTagMode] = useState<'and' | 'or'>('and')
+  const [stats, setStats] = useState<CollectionStats | null>(null)
+  const [dupInfo, setDupInfo] = useState<{ duplicates: Array<{ url: string; count: number }>; similar: Array<{ host: string; count: number }> } | null>(null)
+  const [showStats, setShowStats] = useState(false)
+  const [historyFor, setHistoryFor] = useState<Collection | null>(null)
+  const [history, setHistory] = useState<CollectionHistoryEntry[]>([])
+  const [groupManageOpen, setGroupManageOpen] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
 
   useEffect(() => {
     if (!open) return

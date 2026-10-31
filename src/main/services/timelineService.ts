@@ -4,7 +4,14 @@
  * 活动列表来自 activity_log。年度热力图等增强统计在第三阶段完善。
  */
 import type { DB } from '@database/connection'
-import type { TimelineStats, DailyCount, TimelineActivity } from '@shared/types'
+import type {
+  TimelineStats,
+  DailyCount,
+  TimelineActivity,
+  MonthlyTaskStat,
+  TypeDistribution,
+  TagUsage
+} from '@shared/types'
 import { isoToLocalDate, localDateStr } from '@shared/datetime'
 
 function dailyCounts(db: DB, sql: string, params: unknown[]): DailyCount[] {
@@ -62,7 +69,48 @@ export function timelineStats(db: DB, range: TimelineRange): TimelineStats {
     )
     .all(from, to) as Array<Record<string, unknown>>
 
+  // ---- 阶段三扩展统计 ----
+  const monthlyTasks = (
+    db
+      .prepare(
+        `SELECT substr(completed_at, 1, 7) AS m, COUNT(*) AS c
+         FROM tasks WHERE completed = 1 AND completed_at IS NOT NULL
+           AND date(completed_at) BETWEEN date(?) AND date(?)
+         GROUP BY m ORDER BY m`
+      )
+      .all(from, to) as Array<{ m: string; c: number }>
+  ).map((r) => ({ month: r.m, completed: Number(r.c) }))
+
+  const typeDistribution = (
+    db.prepare(`SELECT type, COUNT(*) AS c FROM collections GROUP BY type ORDER BY c DESC`).all() as Array<{
+      type: string
+      c: number
+    }>
+  ).map((r) => ({ type: r.type, count: Number(r.c) }))
+
+  const tagRows = db.prepare(`SELECT tags FROM collections`).all() as Array<{ tags: string }>
+  const tagCount = new Map<string, number>()
+  for (const r of tagRows) {
+    try {
+      const parsed = JSON.parse(r.tags)
+      if (Array.isArray(parsed)) {
+        for (const t of parsed) {
+          if (typeof t === 'string') tagCount.set(t, (tagCount.get(t) ?? 0) + 1)
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  const tagUsage: TagUsage[] = [...tagCount.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 30)
+
   return {
+    monthlyTasks,
+    typeDistribution,
+    tagUsage,
     tasks,
     collections,
     notes,

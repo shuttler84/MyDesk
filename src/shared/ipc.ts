@@ -119,5 +119,30 @@ export const IPC = {
   // 主进程推送（webContents.send；渲染层经 preload onPush 监听）
   PushNotification: 'push:notification',
   // 通知中心
-  NotificationList: 'notification:list'
+  NotificationList: 'notification:list',
+
+  // ===== 阶段三新增 =====
+  // 收藏分组
+  GroupList: 'groups:list',
+  GroupCreate: 'groups:create',
+  GroupUpdate: 'groups:update',
+  GroupDelete: 'groups:delete',
+  // 收藏增强
+  CollectionSetGroup: 'collections:set-group',
+  CollectionHistory: 'collections:history',
+  CollectionStats: 'collections:stats',
+  CollectionDuplicates: 'collections:duplicates',
+  // 文件索引增强
+  FileStats: 'files:stats',
+  FileScanStart: 'files:scan-start',
+  FileScanCancel: 'files:scan-cancel',
+  FileScanCommit: 'files:scan-commit',
+  FileImportCsv: 'files:import-csv',
+  FileCleanupInvalid: 'files:cleanup-invalid',
+  // 数据管理中心
+  DataIntegrity: 'data:integrity',
+  // 浏览器扩展
+  ExtensionStatus: 'extension:status',
+  ExtensionResetToken: 'extension:reset-token',
+  ExtensionSetEnabled: 'extension:set-enabled'
 } as const

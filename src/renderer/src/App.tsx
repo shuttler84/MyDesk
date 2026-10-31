@@ -11,6 +11,7 @@ import { FileIndexPage } from './pages/FileIndexPage'
 import { NotesPage } from './pages/NotesPage'
 import { TimelinePage } from './pages/TimelinePage'
 import { SettingsPage } from './pages/SettingsPage'
+import { DataPage } from './pages/DataPage'
 import { QuickAddModal } from './components/QuickAddModal'
 import { QuickAddWindow } from './QuickAddWindow'
 import type { PageId } from '@shared/types'
@@ -23,6 +24,7 @@ const PAGES: Record<PageId, React.ComponentType> = {
   files: FileIndexPage,
   notes: NotesPage,
   timeline: TimelinePage,
+  data: DataPage,
   settings: SettingsPage
 }
 

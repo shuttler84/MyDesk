@@ -10,11 +10,12 @@ MyDesk 是一款本地优先（local-first）的 Windows 桌面个人数字工�
 | --- | --- |
 | **Dashboard** | 日期时钟、今日任务进度、统计概览、重要事项、最近内容、快捷操作 |
 | **Tasks** | 新建/编辑/删除/完成、拖拽排序（持久化）、优先级、截止日期时间、备注、重要置顶、未完成任务自动延续到今日 |
-| **Collections** | 收藏网站/GitHub/Bilibili/YouTube/论坛/文章，自动抓取标题/描述/图标/预览图，重复检测，卡片/列表视图，多标签筛选 |
+| **Collections** | 收藏网站/GitHub/Bilibili/YouTube/论坛/文章，自动抓取标题/描述/图标/预览图，自定义分组，重复/相似检测，修改历史，批量操作与导出，标签 AND/OR 组合筛选 |
 | **Private Vault** | 独立主密码，Argon2id + AES-256-GCM 整容器加密，闲置自动锁定，剪贴板定时清理，密钥轮换 |
 | **File Index** | 记录重要文件位置，路径有效性检查，打开文件/所在目录，复制路径 |
 | **Notes** | Markdown 编辑与预览、代码块、图片附件、分类、标签、搜索 |
-| **Timeline** | 每日任务完成/收藏/笔记/文件索引统计、最近活动、日期筛选 |
+| **Timeline** | 年度活动热力图、每日/每月统计、收藏类型分布、标签使用、日期详情、最近活动 |
+| **数据管理** | 独立页面：备份/恢复、自动备份与历史、导出、数据库完整性检查、迁移记录、跨设备迁移指引 |
 | **Settings** | 五种主题（Mint / Lavender / Cream / Midnight / Glass）、动画选项、启动页、备份与恢复、JSON/CSV/Markdown 导出 |
 
 ## 技术栈
@@ -22,6 +23,7 @@ MyDesk 是一款本地优先（local-first）的 Windows 桌面个人数字工�
 - **Electron 45** + **React 18** + **TypeScript** + **Tailwind CSS** + **Framer Motion**
 - **SQLite**（Node/Electron 内置 `node:sqlite`，WAL 模式，零原生编译依赖）
 - **Argon2id**（hash-wasm）+ **AES-256-GCM**（Node crypto）
+- **浏览器扩展**：`browser-extension/` 目录（Chromium MV3），通过本地 127.0.0.1 服务 + 令牌一键收藏
 - **electron-vite** 构建，**electron-builder** 打包
 
 ## 快速开始（开发）

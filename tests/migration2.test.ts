@@ -18,8 +18,8 @@ describe('schema v2 migration', () => {
   it('migrates fresh db to v2 with new structures', () => {
     const db = openDatabase(tempDbPath())
     const res = migrate(db)
-    expect(res.toVersion).toBe(2)
-    expect(LATEST_SCHEMA_VERSION).toBe(2)
+    expect(res.toVersion).toBe(LATEST_SCHEMA_VERSION)
+    expect(LATEST_SCHEMA_VERSION).toBe(3)
 
     // 新列存在
     const cols = db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{ name: string }>
@@ -41,7 +41,8 @@ describe('schema v2 migration', () => {
     const history = db.prepare(`SELECT migration_id FROM migration_history ORDER BY to_version`).all() as Array<{
       migration_id: string
     }>
-    expect(history.map((h) => h.migration_id)).toEqual(['001_initial_schema', '002_task_reminders'])
+    expect(history[0].migration_id).toBe('001_initial_schema')
+    expect(history[1].migration_id).toBe('002_task_reminders')
     db.close()
   })
 
@@ -62,7 +63,7 @@ describe('schema v2 migration', () => {
 
     const db2 = openDatabase(path)
     const res = migrate(db2)
-    expect(res.toVersion).toBe(2)
+    expect(res.toVersion).toBe(LATEST_SCHEMA_VERSION)
     expect(res.fromVersion).toBe(1)
     const t = db2.prepare(`SELECT title, priority FROM tasks WHERE id = 'v1t'`).get() as { title: string; priority: string }
     expect(t.title).toBe('阶段一的任务')

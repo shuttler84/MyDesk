@@ -10,7 +10,8 @@ import {
   FolderOpen,
   StickyNote,
   Activity,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  HardDriveDownload
 } from 'lucide-react'
 import type { PageId } from '@shared/types'
 import { useApp } from '../store/AppStore'
@@ -23,6 +24,7 @@ const NAV: Array<{ id: PageId; label: string; icon: React.ReactNode }> = [
   { id: 'files', label: '文件索引', icon: <FolderOpen size={19} /> },
   { id: 'notes', label: '笔记', icon: <StickyNote size={19} /> },
   { id: 'timeline', label: '时间轴', icon: <Activity size={19} /> },
+  { id: 'data', label: '数据管理', icon: <HardDriveDownload size={19} /> },
   { id: 'settings', label: '设置', icon: <SettingsIcon size={19} /> }
 ]
 

@@ -25,7 +25,7 @@ import * as backupService from './services/backupService'
 import * as exportService from './services/exportService'
 import { fetchUrlMeta } from './services/metaFetchService'
 import { deleteManyCollections, setManyTags, getByIds } from './services/collectionService'
-import { createManyFileIndex, getFileByIds } from './services/fileIndexService'
+import { getFileByIds } from './services/fileIndexService'
 import { buildCollectionsCsvByIds, buildFilesCsvByIds } from './services/exportService'
 import {
   listBackups,
@@ -36,6 +36,29 @@ import {
 import { parseQuickAddInput } from '@shared/quickAdd'
 import { localDateStr } from '@shared/datetime'
 import type { NotificationCenter } from './notificationCenter'
+import {
+  listGroups,
+  createGroup,
+  updateGroup,
+  deleteGroup,
+  filterByGroup,
+  sortCollections,
+  filterByTagsMode,
+  getCollectionHistory,
+  collectionStats,
+  findDuplicateUrls,
+  findSimilarCollections
+} from './services/collectionService'
+import {
+  fileIndexStats,
+  scanDirectory,
+  cancelScan,
+  importFileIndexCsv,
+  findInvalidEntries,
+  createManyFileIndex
+} from './services/fileIndexService'
+import { databaseIntegrity } from './services/dataCenterService'
+import { ExtensionServer, resetToken } from './services/extensionServer'
 import { logActivity } from './services/activityService'
 import { statPath } from './services/fileIndexService'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'fs'
@@ -74,6 +97,7 @@ const empty = z.object({}).passthrough()
 export interface IpcExtras {
   notifications: NotificationCenter
   hideQuickAdd: () => void
+  extensionServer: ExtensionServer
 }
 
 export function registerAllIpc(ctx: ServiceContext, vault: VaultManager, extras: IpcExtras): void {
@@ -116,9 +140,23 @@ export function registerAllIpc(ctx: ServiceContext, vault: VaultManager, extras:
   })
 
   // ---------- collections ----------
-  register(IPC.CollectionList, empty, (i) =>
-    collectionService.listCollections(db, i as never)
-  )
+  register(IPC.CollectionList, empty, (i) => {
+    const filter = (i ?? {}) as {
+      type?: string
+      status?: string
+      tags?: string[]
+      search?: string
+      tagMode?: 'and' | 'or'
+      sortBy?: string
+      groupId?: string | null
+    }
+    let list = collectionService.listCollections(db, filter as never)
+    if (filter.groupId !== undefined) list = collectionService.filterByGroup(list, filter.groupId)
+    if (filter.tags && filter.tags.length > 0) {
+      list = collectionService.filterByTagsMode(list, filter.tags, filter.tagMode ?? 'and')
+    }
+    return collectionService.sortCollections(list, filter.sortBy ?? 'created_desc')
+  })
   register(IPC.CollectionCreate, v.collectionCreateSchema, (i) => {
     const c = collectionService.createCollection(db, i as never)
     logActivity(db, 'collection_created', c.id, c.name)
@@ -431,6 +469,75 @@ export function registerAllIpc(ctx: ServiceContext, vault: VaultManager, extras:
 
   // ---------- 阶段二：通知中心 ----------
   register(IPC.NotificationList, empty, () => extras.notifications.list())
+
+  // ---------- 阶段三：收藏分组与增强 ----------
+  register(IPC.GroupList, empty, () => listGroups(db))
+  register(IPC.GroupCreate, v.groupCreateSchema, (i) => createGroup(db, (i as { name: string }).name))
+  register(IPC.GroupUpdate, v.groupUpdateSchema, (i) => {
+    const p2 = i as { id: string; name?: string; sortOrder?: number }
+    updateGroup(db, p2.id, { name: p2.name, sortOrder: p2.sortOrder })
+    return true
+  })
+  register(IPC.GroupDelete, z.object({ id: v.idSchema }), (i) => {
+    deleteGroup(db, (i as { id: string }).id)
+    return true
+  })
+  register(IPC.CollectionSetGroup, v.idsSchema.extend({ groupId: v.idSchema.nullable() }), (i) => {
+    const p3 = i as { ids: string[]; groupId: string | null }
+    let n = 0
+    for (const id of p3.ids) {
+      collectionService.updateCollection(db, id, { groupId: p3.groupId })
+      n++
+    }
+    return { updated: n }
+  })
+  register(IPC.CollectionHistory, z.object({ id: v.idSchema }), (i) =>
+    getCollectionHistory(db, (i as { id: string }).id)
+  )
+  register(IPC.CollectionStats, empty, () => collectionStats(db))
+  register(IPC.CollectionDuplicates, empty, () => ({
+    duplicates: findDuplicateUrls(db),
+    similar: findSimilarCollections(db)
+  }))
+
+  // ---------- 阶段三：文件索引增强 ----------
+  register(IPC.FileStats, empty, () => fileIndexStats(db))
+  register(IPC.FileScanStart, v.scanOptionsSchema, (i) => {
+    const opts = i as {
+      directory: string
+      extensions: string[]
+      maxDepth: number
+      maxFiles: number
+    }
+    const result = scanDirectory(db, opts)
+    return result
+  })
+  register(IPC.FileScanCancel, empty, () => {
+    cancelScan('__all__')
+    return true
+  })
+  register(IPC.FileScanCommit, v.scanCommitSchema, (i) => {
+    return createManyFileIndex(db, (i as { paths: string[] }).paths)
+  })
+  register(IPC.FileImportCsv, v.importCsvSchema, (i) => {
+    const picked = (i as { filePath: string }).filePath
+    return importFileIndexCsv(db, picked)
+  })
+  register(IPC.FileCleanupInvalid, empty, () => {
+    return { invalid: findInvalidEntries(db) }
+  })
+
+  // ---------- 阶段三：数据管理中心 ----------
+  register(IPC.DataIntegrity, empty, () => databaseIntegrity(db))
+
+  // ---------- 阶段三：浏览器扩展 ----------
+  register(IPC.ExtensionStatus, empty, () => extras.extensionServer.status(db))
+  register(IPC.ExtensionResetToken, empty, () => ({ token: resetToken(db) }))
+  register(IPC.ExtensionSetEnabled, z.object({ enabled: z.boolean() }), (i) => {
+    const enabled = (i as { enabled: boolean }).enabled
+    extras.extensionServer.setEnabled(ctx, enabled)
+    return { enabled }
+  })
 
   // ---------- misc reads used by UI ----------
   register('collections:tags', empty, () => collectionService.allTags(db))

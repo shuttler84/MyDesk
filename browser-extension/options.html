@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      body { width: 480px; margin: 0; padding: 20px; font-family: 'Segoe UI', 'Microsoft YaHei UI', sans-serif; background: #f4faf7; color: #26322e; font-size: 13px; }
+      h1 { font-size: 16px; }
+      label { display: block; margin: 12px 0 4px; font-weight: 600; font-size: 12px; color: #5a6862; }
+      input { width: 100%; padding: 8px 10px; border: 1px solid #d5e5de; border-radius: 8px; font-size: 13px; box-sizing: border-box; }
+      button { margin-top: 14px; padding: 8px 16px; border: 0; border-radius: 8px; background: #40916c; color: #fff; font-weight: 600; cursor: pointer; }
+      .tip { background: #fff; border: 1px solid #e0eae5; border-radius: 8px; padding: 10px 12px; margin-top: 14px; font-size: 12px; color: #5a6862; line-height: 1.7; }
+      #status { margin-top: 10px; color: #2e7d5c; min-height: 18px; }
+    </style>
+  </head>
+  <body>
+    <h1>MyDesk 收藏助手 · 设置</h1>
+    <label>MyDesk 服务地址（默认即可）</label>
+    <input id="server" placeholder="http://127.0.0.1:27182" />
+    <label>连接令牌（在 MyDesk → 设置 → 浏览器扩展 中复制）</label>
+    <input id="token" placeholder="粘贴 MyDesk 显示的令牌" />
+    <button id="save">保存</button>
+    <div id="status"></div>
+    <div class="tip">
+      安全说明：令牌只保存在本机浏览器与 MyDesk 之间；MyDesk 的本地服务仅监听 127.0.0.1，
+      不暴露到网络。令牌可在 MyDesk 设置中随时重置。
+    </div>
+    <script src="options.js"></script>
+  </body>
+</html>

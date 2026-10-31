@@ -105,6 +105,44 @@ export const api = {
     run: (filePath: string, format: T.ExportFormat) =>
       call<{ path: string; count: number }>(IPC.ExportData, { filePath, format })
   },
+  timelineV2: {
+    stats: (range?: { from?: string | null; to?: string | null }) =>
+      call<T.TimelineStats>(IPC.TimelineStats, range ?? {})
+  },
+  groups: {
+    list: () => call<T.CollectionGroup[]>(IPC.GroupList),
+    create: (name: string) => call<T.CollectionGroup>(IPC.GroupCreate, { name }),
+    update: (id: string, patch: { name?: string; sortOrder?: number }) =>
+      call<boolean>(IPC.GroupUpdate, { id, ...patch }),
+    remove: (id: string) => call<boolean>(IPC.GroupDelete, { id })
+  },
+  collectionsV3: {
+    setGroup: (ids: string[], groupId: string | null) =>
+      call<{ updated: number }>(IPC.CollectionSetGroup, { ids, groupId }),
+    history: (id: string) => call<T.CollectionHistoryEntry[]>(IPC.CollectionHistory, { id }),
+    stats: () => call<T.CollectionStats>(IPC.CollectionStats),
+    duplicates: () => call<{ duplicates: Array<{ url: string; count: number }>; similar: Array<{ host: string; count: number }> }>(IPC.CollectionDuplicates)
+  },
+  filesV3: {
+    stats: () => call<T.FileIndexStats>(IPC.FileStats),
+    scan: (opts: T.ScanOptions) =>
+      call<{ files: Array<{ path: string; name: string; fileType: string; size: number }>; cancelled: boolean }>(IPC.FileScanStart, opts),
+    commit: (paths: string[]) =>
+      call<{ added: T.FileIndexItem[]; failed: Array<{ path: string; reason: string }> }>(IPC.FileScanCommit, { paths }),
+    importCsv: () => call<{ imported: number; skipped: number; errors: Array<{ line: number; reason: string }> } | null>(IPC.FileImportCsv, {}) as never,
+    importCsvAt: (filePath: string) =>
+      call<{ imported: number; skipped: number; errors: Array<{ line: number; reason: string }> }>(IPC.FileImportCsv, { filePath }),
+    cleanupInvalid: () =>
+      call<{ invalid: T.FileIndexItem[] }>(IPC.FileCleanupInvalid)
+  },
+  dataCenter: {
+    integrity: () => call<T.DatabaseIntegrityReport>(IPC.DataIntegrity)
+  },
+  extension: {
+    status: () => call<{ port: number; enabled: boolean; token: string }>(IPC.ExtensionStatus),
+    resetToken: () => call<{ token: string }>(IPC.ExtensionResetToken),
+    setEnabled: (enabled: boolean) => call<{ enabled: boolean }>(IPC.ExtensionSetEnabled, { enabled })
+  },
   notifications: {
     list: () => call<T.NotificationItem[]>(IPC.NotificationList)
   },

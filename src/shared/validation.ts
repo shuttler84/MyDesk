@@ -159,7 +159,7 @@ export const settingsPatchSchema = z.object({
   theme: z.enum(['mint', 'lavender', 'cream', 'midnight', 'glass']).optional(),
   animation: z.enum(['full', 'reduced', 'off']).optional(),
   startPage: z
-    .enum(['dashboard', 'tasks', 'collections', 'vault', 'files', 'notes', 'timeline', 'settings'])
+    .enum(['dashboard', 'tasks', 'collections', 'vault', 'files', 'notes', 'timeline', 'data', 'settings'])
     .optional(),
   vaultAutoLockMinutes: z.number().int().min(1).max(1440).optional(),
   clipboardClearSeconds: z.number().int().min(5).max(600).optional(),
@@ -170,7 +170,8 @@ export const settingsPatchSchema = z.object({
   autoBackupKeepCount: z.number().int().min(1).max(100).optional(),
   quietStart: localTime.nullable().optional(),
   quietEnd: localTime.nullable().optional(),
-  defaultReminderMinutes: reminderMinutesSchema.optional()
+  defaultReminderMinutes: reminderMinutesSchema.optional(),
+  extensionEnabled: z.boolean().optional()
 })
 
 // ---------- Filter / search ----------
@@ -227,4 +228,47 @@ export const quickAddSaveSchema = z.object({
   kind: z.enum(['task', 'note', 'url', 'github', 'file']),
   text: z.string().trim().min(1).max(2000),
   extra: z.string().max(5000).optional()
+})
+
+// ---------- 阶段三 ----------
+
+export const groupCreateSchema = z.object({
+  name: z.string().trim().min(1).max(100)
+})
+
+export const groupUpdateSchema = z.object({
+  id: idSchema,
+  name: z.string().trim().min(1).max(100).optional(),
+  sortOrder: z.number().optional()
+})
+
+export const collectionSortSchema = z.object({
+  sortBy: z.enum(['created_desc', 'created_asc', 'updated_desc', 'name_asc', 'importance']).optional(),
+  /** 标签组合模式 */
+  tagMode: z.enum(['and', 'or']).optional(),
+  /** 分组筛选：null = 未分组，'all' = 全部 */
+  groupId: idSchema.nullable().optional()
+})
+
+export const scanOptionsSchema = z.object({
+  directory: z.string().trim().min(1).max(1024),
+  extensions: z.array(z.string().trim().max(20)).max(30),
+  maxDepth: z.number().int().min(0).max(10),
+  maxFiles: z.number().int().min(1).max(5000)
+})
+
+export const scanCommitSchema = z.object({
+  paths: z.array(z.string().trim().min(1).max(1024)).min(1).max(5000)
+})
+
+export const importCsvSchema = z.object({
+  filePath: z.string().trim().min(1).max(1024)
+})
+
+export const extensionSaveSchema = z.object({
+  url: z.string().trim().url().max(2048).refine((u) => /^https?:\/\//i.test(u), '仅支持 http/https'),
+  title: z.string().trim().max(300),
+  description: z.string().max(2000).optional(),
+  note: z.string().max(5000).optional(),
+  tags: z.array(z.string().trim().min(1).max(50)).max(30).optional()
 })

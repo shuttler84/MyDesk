@@ -5,6 +5,7 @@
 
 - `001_initial_schema.sql` — Schema V1（MyDesk 1.0.0）
 - `002_task_reminders.sql` — Schema V2（MyDesk 1.1.0，任务提醒）
+- `003_collection_groups_history.sql` — Schema V3（MyDesk 1.2.0，收藏分组/历史 + 文件来源标识）
 
 新增迁移时的流程（详见 docs/DATABASE_MIGRATION.md）：
 
