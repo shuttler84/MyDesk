@@ -262,7 +262,7 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
       <button
         onClick={onQuickAdd}
         title="快速添加任务"
-        className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-sm font-medium text-on-primary shadow-soft transition-all hover:brightness-110 active:scale-95"
+        className="btn-primary flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-on-primary shadow-soft"
       >
         <Plus size={16} />
         <span className="hidden sm:inline">快速添加</span>

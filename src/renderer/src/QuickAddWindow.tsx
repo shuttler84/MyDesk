@@ -101,7 +101,7 @@ export function QuickAddWindow() {
           <button
             onClick={() => void save()}
             disabled={!text.trim() || status !== 'idle'}
-            className="h-9 shrink-0 rounded-xl bg-primary px-4 text-sm font-medium text-on-primary transition-all hover:brightness-110 active:scale-95 disabled:opacity-50"
+            className="btn-primary h-9 shrink-0 rounded-xl px-4 text-sm font-medium text-on-primary disabled:opacity-50"
           >
             {status === 'saving' ? '保存中…' : status === 'saved' ? '✓ 已保存' : '添加'}
           </button>
