@@ -28,6 +28,7 @@ import { autoBackupIfDue } from './services/backupService'
 import { ExtensionServer } from './services/extensionServer'
 import { getSettings, updateSettings } from './services/settingsService'
 import { isInQuietHours } from '@shared/reminder'
+import { resolveAppIconPath } from './appIcon'
 
 // 防止多实例并发写数据库
 if (!app.requestSingleInstanceLock()) {
@@ -64,7 +65,7 @@ function createWindow(): void {
     backgroundColor: '#f4faf7',
     autoHideMenuBar: true,
     title: 'MyDesk',
-    icon: join(__dirname, '../../build/icon.png'),
+    icon: resolveAppIconPath() ?? undefined,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -253,7 +254,7 @@ app.whenReady().then(() => {
   // 系统托盘
   tray = createTray({
     showMainWindow: showMainWindow,
-    showQuickAdd: () => createOrShowQuickAdd(),
+    showQuickAdd: () => createOrShowQuickAdd(resolveAppIconPath() ?? undefined),
     backupNow: () => {
       try {
         if (!ctx) return
@@ -320,7 +321,7 @@ app.whenReady().then(() => {
   if (process.env.MYDESK_E2E2) {
     mainWindow?.webContents.once('did-finish-load', () => {
       void import('./e2eProbe2').then(({ runE2EProbe2 }) => {
-        if (mainWindow) void runE2EProbe2(mainWindow, { showQuickAdd: () => createOrShowQuickAdd(), hideQuickAdd })
+        if (mainWindow) void runE2EProbe2(mainWindow, { showQuickAdd: () => createOrShowQuickAdd(resolveAppIconPath() ?? undefined), hideQuickAdd })
       })
     })
   }

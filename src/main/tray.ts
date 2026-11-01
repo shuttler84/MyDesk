@@ -4,10 +4,9 @@
  * - 右键菜单：显示主窗口 / 全局快速添加 / 立即备份 / 退出
  * - 关闭主窗口行为由设置控制（ask / tray / exit）
  */
-import { Tray, Menu, nativeImage, app } from 'electron'
-import { join } from 'path'
-import { existsSync } from 'fs'
+import { Tray, Menu, nativeImage } from 'electron'
 import { QUICK_ADD_HOTKEY } from './quickAdd'
+import { resolveAppIconPath } from './appIcon'
 
 export interface TrayDeps {
   showMainWindow: () => void
@@ -20,16 +19,7 @@ export interface TrayDeps {
 let tray: Tray | null = null
 
 function resolveIconPath(): string | null {
-  // 打包后：资源目录（extraResources）；开发时：项目 build 目录
-  const candidates = [
-    join(process.resourcesPath ?? '', 'icon.png'),
-    join(app.getAppPath(), 'build', 'icon.png'),
-    join(__dirname, '../../build/icon.png')
-  ]
-  for (const p of candidates) {
-    if (p && existsSync(p)) return p
-  }
-  return null
+  return resolveAppIconPath()
 }
 
 export function createTray(deps: TrayDeps): Tray | null {
