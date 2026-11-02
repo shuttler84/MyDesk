@@ -29,9 +29,10 @@ export default {
         '2xl': '1.25rem'
       },
       boxShadow: {
-        soft: '0 2px 12px -2px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.04)',
-        lifted: '0 10px 30px -6px rgb(0 0 0 / 0.14), 0 4px 8px rgb(0 0 0 / 0.06)',
-        modal: '0 24px 60px -12px rgb(0 0 0 / 0.28)'
+        // 由各主题的 CSS 变量定义（柔和阴影 / 硬边偏移阴影 / 无阴影）
+        soft: 'var(--shadow-soft)',
+        lifted: 'var(--shadow-lifted)',
+        modal: 'var(--shadow-modal)'
       },
       fontFamily: {
         sans: [
@@ -43,6 +44,9 @@ export default {
           'Microsoft YaHei UI',
           'sans-serif'
         ],
+        // 标题字体：由 --heading-font 解析（默认跟随正文字体，Claude 主题为衬线，
+        // 用户可在设置中强制衬线/跟随正文，见 fonts.css）
+        heading: ['var(--heading-font)'],
         mono: ['JetBrains Mono', 'Cascadia Code', 'Consolas', 'monospace']
       }
     }

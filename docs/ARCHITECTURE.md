@@ -80,9 +80,17 @@
 | `shared/quickAdd.ts` / `reminder.ts` | 平台无关的快速添加识别器与提醒核心 |
 | `tests/*` | Vitest 测试（helpers 提供平台桩） |
 
-## 4. 渲染层主题体系
+## 4. 渲染层设计系统与主题体系（MyDesk 2.0）
 
-六种主题 = 每主题一组设计令牌（`src/renderer/src/theme/theme.css`）：颜色令牌 `--c-*`（Tailwind 映射消费）+ 组件令牌 `--app-bg / --btn-primary-* / --focus-glow / --card-hover-glow / --c-card-alpha / --c-glass-blur`（由基础组件类 `.btn-primary / .field-input / .glass-card` 消费，实现各主题下主按钮渐变、聚焦光晕、卡片悬停光晕、页面多层背景的差异化表达）。主题清单/名称/预览统一注册在 `src/shared/themes.ts`（单一事实来源，新增主题 = 注册 + 一组变量）。切换主题只更新 `<html data-theme>`，全局统一生效（背景/导航/卡片/按钮/输入框/弹窗/标签/图表/悬停/选中）。动画偏好写入 `data-animation`，CSS 层统一降级并支持 `prefers-reduced-motion`。
+**四层结构**：Design System（布局/信息架构/间距/交互规范）→ Component System（`components/ui.tsx`，组件不依赖主题名称）→ Theme System（主题只改变视觉令牌）→ Page Composition（九页面按统一骨架组合：PageHeader → PageToolbar → Content）。所有主题共享同一套布局架构与交互行为，禁止业务页面按主题名分叉布局（禁止 `if (theme === 'acid')` 式布局分叉）。
+
+**九种主题** = 每主题一组设计令牌（`src/renderer/src/theme/theme.css`）：颜色令牌 `--c-*`（Tailwind 映射消费）+ 组件令牌 `--app-bg / --btn-primary-* / --focus-glow / --card-hover-glow / --c-card-alpha / --c-glass-blur / --shadow-soft|lifted|modal / --heading-font-default`（由基础组件类 `.btn-primary / .field-input / .glass-card` 消费）。主题清单/名称/预览/预览核心色统一注册在 `src/shared/themes.ts`（单一事实来源，新增主题 = 注册 + 一组变量 + preview 色组）。Claude 主题为默认主题（新用户/从未保存主题者生效；已保存偏好的用户升级后保持原选择）。主题级 CSS 覆盖（Acid 直角硬阴影、Neo 粗黑边框方角、Claude 衬线标题）仅作用于视觉层。
+
+**标题字体系统**：`--heading-font` 解析链 = 用户设置 `data-heading`（serif / follow）→ 主题默认 `--heading-font-default`（Claude = 衬线，其余 = 正文字体）→ `var(--app-font)`。衬线字体为思源宋体（Source Han Serif CN，SIL OFL 1.0，随应用打包）。Tailwind 提供 `font-heading` 工具类供 PageHeader / SectionHeading / Dashboard 问候语等消费。
+
+**全局正文字体**：`src/renderer/src/theme/fonts.css`（--app-font 变量，`data-font` 切换）+ `theme/loadFonts.ts`（字体文件经 vite 资源管道 import 后以 @font-face 注入，构建期 100% 解析）。字体设置持久化于 settings 表 `fontFamily` / `headingFont` 键，与主题独立；主进程启动时经 URL 参数注入首屏，防闪烁。切换主题只更新 `<html data-theme>`，全局统一生效。动画偏好写入 `data-animation`，CSS 层统一降级并支持 `prefers-reduced-motion`。
+
+**App Shell**：`layout/Sidebar.tsx`（品牌区 / ＋新建 / 分组导航：工作空间·资料库·回顾·管理 / 最近访问 / 底部状态与设置，折叠状态持久化于 localStorage `mydesk-sidebar-collapsed`，最近访问持久化于 `mydesk-recent-pages`）+ `layout/Topbar.tsx`（页面上下文 / 全局搜索 / 通知中心）。主内容滚动独立于侧栏，内容宽度由各页面按信息密度自定。
 
 ## 5. Android 适配预留
 

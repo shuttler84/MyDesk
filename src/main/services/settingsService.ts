@@ -2,10 +2,17 @@
  * 设置服务 — key-value 持久化，带类型安全的默认值。
  */
 import type { DB } from '@database/connection'
-import type { AppSettings, AnimationPref, ThemeName, PageId, TrayCloseBehavior, AutoBackupFrequency } from '@shared/types'
+import type {
+  AppSettings,
+  AnimationPref,
+  ThemeName,
+  PageId,
+  TrayCloseBehavior,
+  AutoBackupFrequency
+} from '@shared/types'
 
 export const DEFAULT_SETTINGS: AppSettings = {
-  theme: 'holographic',
+  theme: 'claude',
   animation: 'full',
   startPage: 'dashboard',
   vaultAutoLockMinutes: 10,
@@ -18,7 +25,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   quietStart: null,
   quietEnd: null,
   defaultReminderMinutes: null,
-  extensionEnabled: false
+  extensionEnabled: false,
+  fontFamily: 'system',
+  headingFont: 'theme'
 }
 
 const SETTING_KEYS = [
@@ -35,7 +44,9 @@ const SETTING_KEYS = [
   'quietStart',
   'quietEnd',
   'defaultReminderMinutes',
-  'extensionEnabled'
+  'extensionEnabled',
+  'fontFamily',
+  'headingFont'
 ] as const
 
 function coerce<K extends keyof AppSettings>(key: K, raw: string | undefined): AppSettings[K] {
@@ -72,7 +83,9 @@ export function getSettings(db: DB): AppSettings {
     defaultReminderMinutes: (map.get('defaultReminderMinutes') !== undefined
       ? coerce('defaultReminderMinutes', map.get('defaultReminderMinutes'))
       : null) as number | null,
-    extensionEnabled: coerce('extensionEnabled', map.get('extensionEnabled')) as boolean
+    extensionEnabled: coerce('extensionEnabled', map.get('extensionEnabled')) as boolean,
+    fontFamily: coerce('fontFamily', map.get('fontFamily')) as AppSettings['fontFamily'],
+    headingFont: coerce('headingFont', map.get('headingFont')) as AppSettings['headingFont']
   }
 }
 

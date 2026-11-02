@@ -173,7 +173,9 @@ export const settingsPatchSchema = z.object({
   quietStart: localTime.nullable().optional(),
   quietEnd: localTime.nullable().optional(),
   defaultReminderMinutes: reminderMinutesSchema.optional(),
-  extensionEnabled: z.boolean().optional()
+  extensionEnabled: z.boolean().optional(),
+  fontFamily: z.enum(['system', 'source-han', 'sarasa', 'lxgw']).optional(),
+  headingFont: z.enum(['theme', 'serif', 'follow']).optional()
 })
 
 // ---------- Filter / search ----------

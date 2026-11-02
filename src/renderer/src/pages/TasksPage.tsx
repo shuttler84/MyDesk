@@ -1,7 +1,8 @@
 /**
- * Tasks 任务管理页：新建/编辑/删除/完成/拖拽排序/筛选。
+ * Tasks 任务工作区（MyDesk 2.0）：简洁行式任务列表。
  * 视图规则：Today = 未完成且(无截止日期或 ≤ 今天，逾期自动延续)；
  * Upcoming = 未完成且晚于今天；Completed 按完成时间倒序。重要事项置顶。
+ * 保留：新建/编辑/删除/完成/拖拽排序/优先级筛选/搜索/提醒。
  */
 import { useCallback, useEffect, useState } from 'react'
 import { AnimatePresence, Reorder, motion } from 'framer-motion'
@@ -11,11 +12,12 @@ import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import {
   Button,
-  Card,
   EmptyState,
   Field,
   Input,
   Modal,
+  PageHeader,
+  PageToolbar,
   PriorityDot,
   Select,
   SkeletonList,
@@ -98,50 +100,59 @@ export function TasksPage() {
 
   const canReorder = view === 'today' || view === 'upcoming' || view === 'all'
 
+  const openEditor = (t: Task | null) => {
+    setEditing(t)
+    setEditorOpen(true)
+  }
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-auto text-xl font-bold text-text">任务</h1>
+    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+      <PageHeader
+        title="任务"
+        description="今天要做什么，就从这里开始。"
+        actions={
+          <Button variant="primary" onClick={() => openEditor(null)}>
+            <Plus size={16} /> 新建任务
+          </Button>
+        }
+      />
+
+      <PageToolbar>
+        {/* 视图 Tab */}
+        <div className="flex gap-0.5 rounded-xl bg-surface-3/60 p-1">
+          {VIEWS.map((v) => (
+            <button
+              key={v.value}
+              onClick={() => setView(v.value)}
+              className={`rounded-lg px-3 py-1 text-[13px] transition-colors ${
+                view === v.value
+                  ? 'bg-surface font-medium text-text shadow-soft'
+                  : 'text-text-2 hover:text-text'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1" />
+
         <div className="relative">
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-3" />
-          <Input value={search} onChange={setSearch} placeholder="搜索…" className="!w-56 !pl-8" />
+          <Input value={search} onChange={setSearch} placeholder="搜索任务…" className="!w-52 !py-1.5 !pl-8" />
         </div>
         <Select
           value={priority}
           onChange={(v) => setPriority(v as 'all' | Priority)}
           options={[
             { value: 'all', label: '全部优先级' },
-            { value: 'high', label: '高' },
-            { value: 'medium', label: '中' },
-            { value: 'low', label: '低' }
+            { value: 'high', label: '高优先级' },
+            { value: 'medium', label: '中优先级' },
+            { value: 'low', label: '低优先级' }
           ]}
+          className="!py-1.5"
         />
-        <Button
-          variant="primary"
-          onClick={() => {
-            setEditing(null)
-            setEditorOpen(true)
-          }}
-        >
-          <Plus size={16} /> 新建任务
-        </Button>
-      </div>
-
-      <div className="flex gap-1.5">
-        {VIEWS.map((v) => (
-          <button
-            key={v.value}
-            onClick={() => setView(v.value)}
-            className={`rounded-xl px-3.5 py-1.5 text-sm transition-colors ${
-              view === v.value
-                ? 'bg-primary font-medium text-on-primary shadow-soft'
-                : 'text-text-2 hover:bg-surface-3'
-            }`}
-          >
-            {v.label}
-          </button>
-        ))}
-      </div>
+      </PageToolbar>
 
       {tasks === null ? (
         <SkeletonList rows={5} />
@@ -150,27 +161,26 @@ export function TasksPage() {
           icon={<CalendarDays size={36} />}
           title="这里还没有任务"
           hint={
-            view === 'today'
-              ? '添加一个任务开始使用。之前日期未完成的任务会自动延续到「今天」。'
-              : '使用上方按钮创建一个任务。'
+            search || priority !== 'all'
+              ? '当前筛选条件下没有匹配的任务，试试调整搜索或优先级。'
+              : view === 'today'
+                ? '添加一个任务开始使用。之前日期未完成的任务会自动延续到「今天」。'
+                : '使用右上角按钮创建一个任务。'
           }
           action={
-            <Button variant="primary" onClick={() => { setEditing(null); setEditorOpen(true) }}>
+            <Button variant="primary" onClick={() => openEditor(null)}>
               <Plus size={16} /> 新建任务
             </Button>
           }
         />
       ) : canReorder ? (
-        <Reorder.Group axis="y" values={tasks} onReorder={onReorder} className="flex flex-col gap-2.5">
+        <Reorder.Group axis="y" values={tasks} onReorder={onReorder} className="flex flex-col">
           {tasks.map((t) => (
             <Reorder.Item key={t.id} value={t} className="!list-none">
               <TaskRow
                 task={t}
                 onToggle={() => void toggle(t)}
-                onEdit={() => {
-                  setEditing(t)
-                  setEditorOpen(true)
-                }}
+                onEdit={() => openEditor(t)}
                 onDelete={() => void removeTask(t)}
                 onImportant={() => void toggleImportant(t)}
                 draggable={canReorder}
@@ -179,17 +189,14 @@ export function TasksPage() {
           ))}
         </Reorder.Group>
       ) : (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col">
           <AnimatePresence initial={false}>
             {tasks.map((t) => (
               <TaskRow
                 key={t.id}
                 task={t}
                 onToggle={() => void toggle(t)}
-                onEdit={() => {
-                  setEditing(t)
-                  setEditorOpen(true)
-                }}
+                onEdit={() => openEditor(t)}
                 onDelete={() => void removeTask(t)}
                 onImportant={() => void toggleImportant(t)}
                 draggable={false}
@@ -212,6 +219,7 @@ export function TasksPage() {
   )
 }
 
+/** 紧凑任务行：hover 才显示操作，不默认展示大量图标 */
 function TaskRow({
   task,
   onToggle,
@@ -232,80 +240,79 @@ function TaskRow({
   const dueToday = !task.completed && task.dueDate === today
 
   return (
-    <motion.div layout="position" initial={false}>
-      <Card
-        hover={!task.completed}
-        className={`group flex items-center gap-3 px-4 py-3 ${task.completed ? 'opacity-60' : ''} ${
-          overdue ? 'border-danger/40' : ''
+    <motion.div
+      layout="position"
+      initial={false}
+      className={`group flex items-center gap-3 border-b border-border/60 px-3 py-2.5 transition-colors last:border-0 hover:bg-surface-2/70 ${
+        task.completed ? 'opacity-55' : ''
+      } ${overdue ? 'bg-danger/5' : ''}`}
+    >
+      {draggable && (
+        <GripVertical size={14} className="shrink-0 cursor-grab text-text-3 opacity-0 transition-opacity group-hover:opacity-100" />
+      )}
+      {/* 完成勾选（带动画） */}
+      <motion.button
+        whileTap={{ scale: 0.8 }}
+        onClick={onToggle}
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
+          task.completed ? 'border-primary bg-primary' : 'border-border-strong hover:border-primary'
         }`}
       >
-        {draggable && (
-          <GripVertical size={15} className="shrink-0 cursor-grab text-text-3 opacity-0 transition-opacity group-hover:opacity-100" />
+        {task.completed && (
+          <motion.svg
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            viewBox="0 0 12 12"
+            className="h-3 w-3 text-on-primary"
+          >
+            <path d="M2 6.5L4.5 9L10 3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </motion.svg>
         )}
-        {/* 完成勾选（带动画） */}
-        <motion.button
-          whileTap={{ scale: 0.8 }}
-          onClick={onToggle}
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
-            task.completed ? 'border-primary bg-primary' : 'border-border-strong hover:border-primary'
-          }`}
-        >
-          {task.completed && (
-            <motion.svg
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              viewBox="0 0 12 12"
-              className="h-3 w-3 text-on-primary"
-            >
-              <path d="M2 6.5L4.5 9L10 3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </motion.svg>
-          )}
-        </motion.button>
+      </motion.button>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <PriorityDot priority={task.priority} />
-            <span
-              className={`truncate text-sm ${
-                task.completed ? 'text-text-3 line-through' : 'font-medium text-text'
-              }`}
-            >
-              {task.title}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <PriorityDot priority={task.priority} />
+          <span
+            className={`truncate text-sm ${
+              task.completed ? 'text-text-3 line-through' : 'font-medium text-text'
+            }`}
+          >
+            {task.title}
+          </span>
+          {task.isImportant && <Star size={13} className="shrink-0 fill-warning text-warning" />}
+          {task.reminderMinutes !== null && (
+            <span title="已设置提醒" className="shrink-0 text-[10px] text-accent">
+              ⏰
             </span>
-            {task.isImportant && <Star size={13} className="shrink-0 fill-warning text-warning" />}
-            {task.reminderMinutes !== null && (
-              <span title="已设置提醒" className="shrink-0 text-[10px] text-accent">
-                ⏰
+          )}
+          {overdue && <Tag variant="danger">已逾期</Tag>}
+          {dueToday && <Tag>今天</Tag>}
+        </div>
+        {(task.dueDate || task.dueTime || task.notes) && (
+          <p className="mt-0.5 truncate text-xs text-text-3">
+            {task.dueDate && (
+              <span className={`font-mono tabular-nums ${overdue ? 'font-medium text-danger' : ''}`}>
+                {task.dueDate}
+                {task.dueTime ? ` ${task.dueTime}` : ''}
               </span>
             )}
-            {overdue && <Tag className="!bg-danger/10 !text-danger">已逾期</Tag>}
-            {dueToday && <Tag>今天</Tag>}
-          </div>
-          {(task.dueDate || task.dueTime || task.notes) && (
-            <p className="mt-0.5 truncate text-xs text-text-3">
-              {task.dueDate && (
-                <span className={overdue ? 'font-medium text-danger' : ''}>
-                  {task.dueDate}
-                  {task.dueTime ? ` ${task.dueTime}` : ''}
-                </span>
-              )}
-              {task.notes ? ` · ${task.notes}` : ''}
-            </p>
-          )}
-        </div>
+            {task.notes ? ` · ${task.notes}` : ''}
+          </p>
+        )}
+      </div>
 
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          <IconBtn onClick={onImportant} title={task.isImportant ? '取消置顶' : '置顶为重要'}>
-            <Star size={14} className={task.isImportant ? 'fill-warning text-warning' : ''} />
-          </IconBtn>
-          <IconBtn onClick={onEdit} title="编辑">
-            <Pencil size={14} />
-          </IconBtn>
-          <IconBtn onClick={onDelete} title="删除" danger>
-            <Trash2 size={14} />
-          </IconBtn>
-        </div>
-      </Card>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <IconBtn onClick={onImportant} title={task.isImportant ? '取消置顶' : '置顶为重要'}>
+          <Star size={14} className={task.isImportant ? 'fill-warning text-warning' : ''} />
+        </IconBtn>
+        <IconBtn onClick={onEdit} title="编辑">
+          <Pencil size={14} />
+        </IconBtn>
+        <IconBtn onClick={onDelete} title="删除" danger>
+          <Trash2 size={14} />
+        </IconBtn>
+      </div>
     </motion.div>
   )
 }

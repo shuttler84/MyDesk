@@ -1,6 +1,9 @@
 /**
- * Collections 灵感收藏库：新增/编辑/删除、URL 元数据抓取（标题/描述/图标/预览图）、
- * 重复检测、卡片/列表视图、分类筛选、多标签筛选、搜索、复制链接、默认浏览器打开。
+ * Collections 收藏库（MyDesk 2.0 信息架构重构）：
+ * - 页面头部（标题/统计概要 + 新建收藏）→ 轻量工具栏（搜索/排序/视图/高级筛选入口）→ 可展开筛选区
+ * - 启用的筛选条件以 Chip 展示，可单独清除或全部清除
+ * - 卡片/列表视图、批量操作（浮动操作栏）、行内标签编辑、修改历史、统计、分组管理
+ * - URL 元数据抓取、重复检测等原有能力全部保留
  */
 import { useCallback, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -21,7 +24,12 @@ import {
   FileText,
   Link2,
   Bookmark,
-  History
+  History,
+  SlidersHorizontal,
+  BarChart3,
+  FolderPlus,
+  X,
+  Check
 } from 'lucide-react'
 import type {
   Collection,
@@ -40,8 +48,12 @@ import {
   Card,
   EmptyState,
   Field,
+  IconButton,
   Input,
   Modal,
+  PageHeader,
+  PageToolbar,
+  SectionHeading,
   Select,
   SkeletonList,
   Tag,
@@ -94,13 +106,14 @@ export function CollectionsPage() {
   const [batchTagsText, setBatchTagsText] = useState('')
   const [busy, setBusy] = useState(false)
   const [renderLimit, setRenderLimit] = useState(60)
-  const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([])
+  const [groups, setGroups] = useState<CollectionGroup[]>([])
   const [groupId, setGroupId] = useState<string | 'all' | 'none'>('all')
   const [sortBy, setSortBy] = useState('created_desc')
   const [tagMode, setTagMode] = useState<'and' | 'or'>('and')
   const [stats, setStats] = useState<CollectionStats | null>(null)
   const [dupInfo, setDupInfo] = useState<{ duplicates: Array<{ url: string; count: number }>; similar: Array<{ host: string; count: number }> } | null>(null)
   const [showStats, setShowStats] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
   const [historyFor, setHistoryFor] = useState<Collection | null>(null)
   const [history, setHistory] = useState<CollectionHistoryEntry[]>([])
   const [groupManageOpen, setGroupManageOpen] = useState(false)
@@ -239,38 +252,103 @@ export function CollectionsPage() {
     setSelectedTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]))
   }
 
+  /** 当前启用的筛选条件（Chip 展示） */
+  const activeFilters: Array<{ key: string; label: string; clear: () => void }> = []
+  if (type !== 'all') activeFilters.push({ key: 'type', label: `类型：${TYPE_LABELS[type]}`, clear: () => setType('all') })
+  if (status !== 'all') activeFilters.push({ key: 'status', label: `状态：${STATUS_LABELS[status]}`, clear: () => setStatus('all') })
+  if (groupId !== 'all')
+    activeFilters.push({
+      key: 'group',
+      label: groupId === 'none' ? '未分组' : `分组：${groups.find((g) => g.id === groupId)?.name ?? ''}`,
+      clear: () => setGroupId('all')
+    })
+  selectedTags.forEach((t) =>
+    activeFilters.push({ key: `tag-${t}`, label: `#${t}`, clear: () => toggleTag(t) })
+  )
+
+  const clearAllFilters = () => {
+    setType('all')
+    setStatus('all')
+    setGroupId('all')
+    setSelectedTags([])
+    setSearch('')
+  }
+
+  const createGroup = async () => {
+    const name = newGroupName.trim()
+    if (!name) return
+    try {
+      await api.groups.create(name)
+      setNewGroupName('')
+      await load()
+      toast('success', `分组「${name}」已创建`)
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '创建分组失败')
+    }
+  }
+
+  const renameGroup = async (g: CollectionGroup) => {
+    const name = window.prompt('新的分组名称', g.name)?.trim()
+    if (!name || name === g.name) return
+    try {
+      await api.groups.update(g.id, { name })
+      await load()
+      toast('success', '分组已重命名')
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '重命名失败')
+    }
+  }
+
+  const deleteGroup = async (g: CollectionGroup) => {
+    if (!window.confirm(`删除分组「${g.name}」？分组内的收藏不会被删除（变为未分组）。`)) return
+    try {
+      await api.groups.remove(g.id)
+      if (groupId === g.id) setGroupId('all')
+      await load()
+      toast('success', '分组已删除')
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '删除分组失败')
+    }
+  }
+
+  const duplicateCount = (dupInfo?.duplicates.length ?? 0) + (dupInfo?.similar.length ?? 0)
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-auto text-xl font-bold text-text">收藏</h1>
-        <div className="relative">
+      <PageHeader
+        title="收藏"
+        description={
+          stats
+            ? `共 ${stats.total} 条收藏${duplicateCount > 0 ? ` · 发现 ${duplicateCount} 组重复/相似项` : ''}`
+            : '收集网页、GitHub 仓库、视频与文章。'
+        }
+        actions={
+          <>
+            <Button onClick={() => setGroupManageOpen(true)}>
+              <FolderPlus size={15} /> 分组管理
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setEditing(null)
+                setEditorOpen(true)
+              }}
+            >
+              <Plus size={16} /> 新建收藏
+            </Button>
+          </>
+        }
+      />
+
+      {/* 第一层工具栏：仅最常用操作 */}
+      <PageToolbar>
+        <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-3" />
-          <Input value={search} onChange={setSearch} placeholder="搜索…" className="!w-56 !pl-8" />
+          <Input value={search} onChange={setSearch} placeholder="搜索收藏…" className="!py-1.5 !pl-8" />
         </div>
-        <Select
-          value={type}
-          onChange={(v) => setType(v as 'all' | CollectionType)}
-          options={[{ value: 'all', label: '全部类型' }, ...Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))]}
-        />
-        <Select
-          value={status}
-          onChange={(v) => setStatus(v as 'all' | ResearchStatus)}
-          options={[
-            { value: 'all', label: '全部状态' },
-            { value: 'unresearched', label: '未研究' },
-            { value: 'researching', label: '研究中' },
-            { value: 'done', label: '已完成' }
-          ]}
-        />
-        <Select
-          value={groupId}
-          onChange={(v) => setGroupId(v as typeof groupId)}
-          options={[
-            { value: 'all', label: '全部分组' },
-            { value: 'none', label: '未分组' },
-            ...groups.map((g) => ({ value: g.id, label: '📁 ' + g.name }))
-          ]}
-        />
+
+        <div className="flex-1" />
+
         <Select
           value={sortBy}
           onChange={setSortBy}
@@ -281,14 +359,19 @@ export function CollectionsPage() {
             { value: 'name_asc', label: '名称 A→Z' },
             { value: 'importance', label: '重要程度' }
           ]}
+          className="!py-1.5"
         />
-        <Button className="text-xs" onClick={() => setShowStats((v) => !v)}>
-          统计
-        </Button>
-        <Button className="text-xs" onClick={() => setGroupManageOpen(true)}>
-          分组管理
-        </Button>
-        <div className="flex overflow-hidden rounded-xl border border-border">
+        <IconButton
+          title="高级筛选"
+          active={showFilters || activeFilters.length > 0}
+          onClick={() => setShowFilters((v) => !v)}
+        >
+          <SlidersHorizontal size={15} />
+        </IconButton>
+        <IconButton title="统计" active={showStats} onClick={() => setShowStats((v) => !v)}>
+          <BarChart3 size={15} />
+        </IconButton>
+        <div className="flex overflow-hidden rounded-lg border border-border">
           <button
             onClick={() => setGridView(true)}
             className={`p-2 ${gridView ? 'bg-primary-soft text-primary' : 'text-text-3 hover:bg-surface-3'}`}
@@ -304,94 +387,188 @@ export function CollectionsPage() {
             <List size={15} />
           </button>
         </div>
-        <Button
-          variant="primary"
-          onClick={() => {
-            setEditing(null)
-            setEditorOpen(true)
-          }}
-        >
-          <Plus size={16} /> 新建收藏
-        </Button>
-      </div>
+      </PageToolbar>
 
-      {/* 多标签筛选 */}
-      {allTags.length > 0 && (
+      {/* 第二层：可展开高级筛选区 */}
+      <AnimatePresence initial={false}>
+        {showFilters && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="overflow-hidden"
+          >
+            <Card variant="subtle" className="p-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <Field label="类型">
+                  <Select
+                    value={type}
+                    onChange={(v) => setType(v as 'all' | CollectionType)}
+                    options={[{ value: 'all', label: '全部类型' }, ...Object.entries(TYPE_LABELS).map(([value, label]) => ({ value, label }))]}
+                  />
+                </Field>
+                <Field label="研究状态">
+                  <Select
+                    value={status}
+                    onChange={(v) => setStatus(v as 'all' | ResearchStatus)}
+                    options={[
+                      { value: 'all', label: '全部状态' },
+                      { value: 'unresearched', label: '未研究' },
+                      { value: 'researching', label: '研究中' },
+                      { value: 'done', label: '已完成' }
+                    ]}
+                  />
+                </Field>
+                <Field label="分组">
+                  <Select
+                    value={groupId}
+                    onChange={(v) => setGroupId(v as typeof groupId)}
+                    options={[
+                      { value: 'all', label: '全部分组' },
+                      { value: 'none', label: '未分组' },
+                      ...groups.map((g) => ({ value: g.id, label: g.name }))
+                    ]}
+                  />
+                </Field>
+              </div>
+              {allTags.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-text-2">标签</p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {allTags.map((t) => (
+                      <Tag key={t} active={selectedTags.includes(t)} onClick={() => toggleTag(t)}>
+                        {t}
+                      </Tag>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {selectedTags.length > 1 && (
+                <div className="mt-3 flex items-center gap-1.5 text-xs text-text-2">
+                  匹配方式：
+                  <Tag active={tagMode === 'and'} onClick={() => setTagMode('and')}>全部包含</Tag>
+                  <Tag active={tagMode === 'or'} onClick={() => setTagMode('or')}>任一包含</Tag>
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 启用中的筛选条件 Chip */}
+      {(activeFilters.length > 0 || search) && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-text-3">标签：</span>
-          {allTags.map((t) => (
-            <Tag key={t} active={selectedTags.includes(t)} onClick={() => toggleTag(t)}>
-              {t}
-            </Tag>
-          ))}
-          {selectedTags.length > 0 && (
-            <>
-              <Tag active={tagMode === 'and'} onClick={() => setTagMode('and')}>
-                全部包含
-              </Tag>
-              <Tag active={tagMode === 'or'} onClick={() => setTagMode('or')}>
-                任一包含
-              </Tag>
-              <button className="text-xs text-text-3 underline hover:text-text" onClick={() => setSelectedTags([])}>
-                清除
-              </button>
-            </>
+          {search && (
+            <Chip label={`搜索：${search}`} onClear={() => setSearch('')} />
           )}
+          {activeFilters.map((f) => (
+            <Chip key={f.key} label={f.label} onClear={f.clear} />
+          ))}
+          <button
+            onClick={clearAllFilters}
+            className="ml-1 text-xs text-text-3 underline underline-offset-2 transition-colors hover:text-text"
+          >
+            全部清除
+          </button>
         </div>
       )}
 
-      {/* 批量操作工具条 */}
-      {selected.size > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-card flex flex-wrap items-center gap-2 rounded-xl border border-primary/40 px-4 py-2.5"
-        >
-          <span className="text-sm font-medium text-text">已选 {selected.size} 项</span>
-          <Button className="text-xs" onClick={selectAllVisible}>
-            全选当前列表
-          </Button>
-          <Button className="text-xs" onClick={() => setBatchTagsOpen(true)}>
-            批量修改标签
-          </Button>
-          {groups.length > 0 && (
-            <Select
-              className="!py-1 text-xs"
-              value=""
-              onChange={(v) => {
-                if (!v) return
-                void api.collectionsV3.setGroup([...selected], v).then((r) => {
-                  toast('success', '已将 ' + r.updated + ' 条加入分组')
-                  setSelected(new Set())
-                  void load()
-                })
-              }}
-              options={[{ value: '', label: '加入分组…' }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
-            />
-          )}
-          <Button className="text-xs" onClick={() => void exportSelected()}>
-            导出选中
-          </Button>
-          <Button variant="danger" className="text-xs" disabled={busy} onClick={() => void batchDelete()}>
-            批量删除
-          </Button>
-          <Button variant="ghost" className="text-xs" onClick={() => setSelected(new Set())}>
-            取消选择
-          </Button>
-        </motion.div>
-      )}
+      {/* 统计面板 */}
+      <AnimatePresence initial={false}>
+        {showStats && stats && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="overflow-hidden"
+          >
+            <Card className="p-5">
+              <SectionHeading
+                title="收藏统计"
+                extra={
+                  <Button variant="ghost" size="sm" onClick={() => setShowStats(false)}>
+                    收起
+                  </Button>
+                }
+              />
+              <div className="mt-3 grid grid-cols-1 gap-5 md:grid-cols-2">
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-text-2">按类型</p>
+                  <div className="flex flex-col gap-1">
+                    {stats.byType.map((row) => (
+                      <div key={row.type} className="flex items-center gap-2 text-xs">
+                        <span className="w-16 shrink-0 text-text-2">{TYPE_LABELS[row.type as CollectionType] ?? row.type}</span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
+                          <div className="h-full rounded-full bg-primary/70" style={{ width: `${(row.count / Math.max(stats.total, 1)) * 100}%` }} />
+                        </div>
+                        <span className="w-8 text-right font-mono tabular-nums text-text-3">{row.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-xs font-medium text-text-2">按状态</p>
+                  <div className="flex flex-col gap-1">
+                    {stats.byStatus.map((row) => (
+                      <div key={row.status} className="flex items-center gap-2 text-xs">
+                        <span className="w-16 shrink-0 text-text-2">{STATUS_LABELS[row.status as ResearchStatus] ?? row.status}</span>
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
+                          <div className="h-full rounded-full bg-accent/70" style={{ width: `${(row.count / Math.max(stats.total, 1)) * 100}%` }} />
+                        </div>
+                        <span className="w-8 text-right font-mono tabular-nums text-text-3">{row.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mb-1.5 mt-3 text-xs font-medium text-text-2">高频标签</p>
+                  <div className="flex flex-wrap gap-1">
+                    {stats.topTags.slice(0, 10).map((t) => (
+                      <Tag key={t.tag} variant="neutral">
+                        {t.tag} <span className="opacity-60">{t.count}</span>
+                      </Tag>
+                    ))}
+                    {stats.topTags.length === 0 && <p className="text-xs text-text-3">暂无标签</p>}
+                  </div>
+                </div>
+              </div>
+              {dupInfo && (dupInfo.duplicates.length > 0 || dupInfo.similar.length > 0) && (
+                <div className="mt-4 border-t border-border pt-3">
+                  <p className="mb-1.5 text-xs font-medium text-text-2">重复 / 相似检测</p>
+                  <div className="flex flex-col gap-1 text-xs text-text-2">
+                    {dupInfo.duplicates.map((d) => (
+                      <p key={d.url}>⚠ 完全重复（{d.count} 条）：<span className="font-mono">{d.url}</span></p>
+                    ))}
+                    {dupInfo.similar.map((d) => (
+                      <p key={d.host}>～ 相似来源（{d.count} 条）：{d.host}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {items === null ? (
         <SkeletonList rows={4} />
       ) : items.length === 0 ? (
         <EmptyState
           icon={<Bookmark size={36} />}
-          title="还没有收藏"
-          hint="粘贴 URL，MyDesk 会自动尝试抓取网页标题、描述与预览图。"
+          title={activeFilters.length > 0 || search ? '没有匹配的收藏' : '还没有收藏'}
+          hint={
+            activeFilters.length > 0 || search
+              ? '试试调整或清除上方的筛选条件。'
+              : '粘贴 URL，MyDesk 会自动尝试抓取网页标题、描述与预览图。'
+          }
           action={
-            <Button variant="primary" onClick={() => { setEditing(null); setEditorOpen(true) }}>
-              <Plus size={16} /> 新建收藏
-            </Button>
+            activeFilters.length > 0 || search ? (
+              <Button onClick={clearAllFilters}>清除筛选条件</Button>
+            ) : (
+              <Button variant="primary" onClick={() => { setEditing(null); setEditorOpen(true) }}>
+                <Plus size={16} /> 新建收藏
+              </Button>
+            )
           }
         />
       ) : gridView ? (
@@ -424,24 +601,23 @@ export function CollectionsPage() {
           </AnimatePresence>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <Card variant="outlined" className="overflow-hidden">
           {items.slice(0, renderLimit).map((c) => (
-            <Card key={c.id} hover className="group flex items-center gap-3 px-4 py-3">
+            <div
+              key={c.id}
+              className="group flex items-center gap-3 border-b border-border/60 px-4 py-2.5 transition-colors last:border-0 hover:bg-surface-2/70"
+            >
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-3 text-text-2">
                 <TypeIcon type={c.type} />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-text">{c.name}</p>
-                <p className="truncate text-xs text-text-3">{c.url}</p>
+                <p className="truncate font-mono text-xs text-text-3">{c.url}</p>
               </div>
-              <Tag>{TYPE_LABELS[c.type]}</Tag>
+              <Tag variant="neutral">{TYPE_LABELS[c.type]}</Tag>
               <Tag
-                className={
-                  c.researchStatus === 'done'
-                    ? '!bg-success/10 !text-success'
-                    : c.researchStatus === 'researching'
-                      ? '!bg-warning/10 !text-warning'
-                      : ''
+                variant={
+                  c.researchStatus === 'done' ? 'success' : c.researchStatus === 'researching' ? 'warning' : 'neutral'
                 }
               >
                 {STATUS_LABELS[c.researchStatus]}
@@ -450,12 +626,12 @@ export function CollectionsPage() {
                 <RowBtn title="打开" onClick={() => void openInBrowser(c)}><ExternalLink size={14} /></RowBtn>
                 <RowBtn title="复制链接" onClick={() => void copyLink(c)}><Copy size={14} /></RowBtn>
                 <RowBtn title="修改历史" onClick={() => void openHistory(c)}><History size={14} /></RowBtn>
-                  <RowBtn title="编辑" onClick={() => { setEditing(c); setEditorOpen(true) }}><Pencil size={14} /></RowBtn>
+                <RowBtn title="编辑" onClick={() => { setEditing(c); setEditorOpen(true) }}><Pencil size={14} /></RowBtn>
                 <RowBtn title="删除" danger onClick={() => void removeItem(c)}><Trash2 size={14} /></RowBtn>
               </div>
-            </Card>
+            </div>
           ))}
-        </div>
+        </Card>
       )}
 
       {/* 长列表分页加载 */}
@@ -466,6 +642,43 @@ export function CollectionsPage() {
           </Button>
         </div>
       )}
+
+      {/* 批量操作浮动栏（选中后才出现，不占页面空间） */}
+      <AnimatePresence>
+        {selected.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 flex-wrap items-center justify-center gap-2"
+          >
+            <div className="glass-card flex flex-wrap items-center gap-2 rounded-2xl border border-primary/40 px-4 py-2.5 shadow-lifted">
+              <span className="text-sm font-medium text-text">已选 {selected.size} 项</span>
+              <Button size="sm" onClick={selectAllVisible}>全选当前列表</Button>
+              <Button size="sm" onClick={() => setBatchTagsOpen(true)}>批量修改标签</Button>
+              {groups.length > 0 && (
+                <Select
+                  className="!py-1 text-xs"
+                  value=""
+                  onChange={(v) => {
+                    if (!v) return
+                    void api.collectionsV3.setGroup([...selected], v).then((r) => {
+                      toast('success', '已将 ' + r.updated + ' 条加入分组')
+                      setSelected(new Set())
+                      void load()
+                    })
+                  }}
+                  options={[{ value: '', label: '加入分组…' }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
+                />
+              )}
+              <Button size="sm" onClick={() => void exportSelected()}>导出选中</Button>
+              <Button variant="danger" size="sm" disabled={busy} onClick={() => void batchDelete()}>批量删除</Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>取消选择</Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 批量修改标签 */}
       <Modal open={batchTagsOpen} onClose={() => setBatchTagsOpen(false)} title={`批量修改标签（已选 ${selected.size} 项）`}>
@@ -490,6 +703,60 @@ export function CollectionsPage() {
         </div>
       </Modal>
 
+      {/* 修改历史 */}
+      <Modal open={historyFor !== null} onClose={() => setHistoryFor(null)} title={`修改历史 — ${historyFor?.name ?? ''}`} wide>
+        {history.length === 0 ? (
+          <p className="py-6 text-center text-sm text-text-3">这条收藏还没有修改记录。</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {history.map((h) => (
+              <div key={h.id} className="rounded-xl border border-border bg-surface-2 px-3.5 py-3">
+                <p className="mb-1.5 font-mono text-xs text-text-3">{new Date(h.changedAt).toLocaleString()} 修改前：</p>
+                <p className="text-sm text-text">{h.snapshot.name}</p>
+                <p className="truncate font-mono text-xs text-text-3">{h.snapshot.url}</p>
+                {h.snapshot.tags.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {h.snapshot.tags.map((t) => (
+                      <Tag key={t} variant="neutral">{t}</Tag>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+
+      {/* 分组管理 */}
+      <Modal open={groupManageOpen} onClose={() => setGroupManageOpen(false)} title="分组管理">
+        <div className="mb-3 flex gap-2">
+          <Input
+            value={newGroupName}
+            onChange={setNewGroupName}
+            placeholder="新分组名称…"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void createGroup()
+            }}
+          />
+          <Button variant="primary" onClick={() => void createGroup()}>创建</Button>
+        </div>
+        {groups.length === 0 ? (
+          <p className="py-4 text-center text-xs text-text-3">
+            还没有分组。创建分组后，可以在卡片多选中把收藏批量加入分组。
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {groups.map((g) => (
+              <div key={g.id} className="flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2">
+                <span className="flex-1 truncate text-sm text-text">{g.name}</span>
+                <RowBtn title="重命名" onClick={() => void renameGroup(g)}><Pencil size={14} /></RowBtn>
+                <RowBtn title="删除分组" danger onClick={() => void deleteGroup(g)}><Trash2 size={14} /></RowBtn>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+
       <CollectionEditorModal
         open={editorOpen}
         editing={editing}
@@ -500,6 +767,18 @@ export function CollectionsPage() {
         }}
       />
     </div>
+  )
+}
+
+/** 筛选条件 Chip（可单独清除） */
+function Chip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-lg bg-primary-soft py-0.5 pl-2 pr-1 text-xs text-primary">
+      {label}
+      <button onClick={onClear} className="rounded p-0.5 transition-colors hover:bg-primary/20" title="清除该条件">
+        <X size={11} />
+      </button>
+    </span>
   )
 }
 
@@ -562,6 +841,8 @@ function CollectionCard({
   onChanged: () => void
 }) {
   const { toast } = useApp()
+  const [tagEditing, setTagEditing] = useState(false)
+  const [tagText, setTagText] = useState('')
 
   const cycleStatus = async () => {
     const order: ResearchStatus[] = ['unresearched', 'researching', 'done']
@@ -571,6 +852,20 @@ function CollectionCard({
       onChanged()
     } catch (err) {
       toast('error', err instanceof Error ? err.message : '更新状态失败')
+    }
+  }
+
+  // 行内标签编辑：回车保存
+  const saveTags = async () => {
+    setTagEditing(false)
+    const tags = tagText.split(/[,，]/).map((t) => t.trim()).filter(Boolean)
+    if (JSON.stringify(tags) === JSON.stringify(c.tags)) return
+    try {
+      await api.collections.update(c.id, { tags })
+      toast('success', '标签已更新')
+      onChanged()
+    } catch (err) {
+      toast('error', err instanceof Error ? err.message : '更新标签失败')
     }
   }
 
@@ -591,7 +886,7 @@ function CollectionCard({
         }`}
         style={{ opacity: selected ? 1 : undefined }}
       >
-        {selected && '✓'}
+        {selected && <Check size={13} />}
       </button>
       {/* 预览图（og:image，抓取失败时不显示） */}
       {c.previewImage && (
@@ -628,36 +923,60 @@ function CollectionCard({
             <p className="truncate text-sm font-semibold text-text transition-colors group-hover:text-primary">
               {c.name}
             </p>
-            <p className="truncate text-xs text-text-3">{c.url}</p>
+            <p className="truncate font-mono text-xs text-text-3">{c.url}</p>
           </button>
         </div>
 
         {c.description && <p className="mt-2 line-clamp-2 text-xs leading-5 text-text-2">{c.description}</p>}
         {c.note && <p className="mt-1.5 rounded-lg bg-surface-2 px-2.5 py-1.5 text-xs text-text-2">📝 {c.note}</p>}
 
-        <div className="mt-2 flex flex-wrap gap-1">
-          <Tag className="!cursor-pointer">{TYPE_LABELS[c.type]}</Tag>
-          {c.tags.map((t) => (
-            <Tag key={t}>{t}</Tag>
-          ))}
+        {/* 标签行（含行内编辑） */}
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          <Tag variant="neutral">{TYPE_LABELS[c.type]}</Tag>
+          {tagEditing ? (
+            <input
+              autoFocus
+              value={tagText}
+              onChange={(e) => setTagText(e.target.value)}
+              onBlur={() => void saveTags()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void saveTags()
+                if (e.key === 'Escape') setTagEditing(false)
+              }}
+              placeholder="逗号分隔标签"
+              className="w-full rounded-lg border border-border bg-surface px-2 py-1 text-xs text-text outline-none focus:border-primary"
+            />
+          ) : (
+            <>
+              {c.tags.map((t) => (
+                <Tag key={t}>{t}</Tag>
+              ))}
+              <button
+                title="编辑标签"
+                onClick={() => {
+                  setTagText(c.tags.join(', '))
+                  setTagEditing(true)
+                }}
+                className="rounded p-1 text-text-3 opacity-0 transition-opacity hover:bg-surface-3 hover:text-text group-hover:opacity-100"
+              >
+                <Pencil size={11} />
+              </button>
+            </>
+          )}
           <Tag
-            className={`!cursor-pointer ${
-              c.researchStatus === 'done'
-                ? '!bg-success/10 !text-success'
-                : c.researchStatus === 'researching'
-                  ? '!bg-warning/10 !text-warning'
-                  : ''
-            }`}
+            variant={
+              c.researchStatus === 'done' ? 'success' : c.researchStatus === 'researching' ? 'warning' : 'neutral'
+            }
             onClick={() => void cycleStatus()}
             active={false}
           >
             {STATUS_LABELS[c.researchStatus]}
           </Tag>
-          {c.importance === 'high' && <Tag className="!bg-danger/10 !text-danger">重要</Tag>}
+          {c.importance === 'high' && <Tag variant="danger">重要</Tag>}
         </div>
 
         <div className="mt-auto flex items-center justify-between pt-3">
-          <span className="text-[10px] text-text-3">{c.createdAt.slice(0, 10)}</span>
+          <span className="font-mono text-[10px] tabular-nums text-text-3">{c.createdAt.slice(0, 10)}</span>
           <div className="flex gap-0.5">
             <RowBtn title="在浏览器打开" onClick={onOpen}><ExternalLink size={14} /></RowBtn>
             <RowBtn title="复制链接" onClick={onCopy}><Copy size={14} /></RowBtn>
@@ -690,18 +1009,6 @@ function CollectionEditorModal({
   const [fetching, setFetching] = useState(false)
   const [duplicate, setDuplicate] = useState<Collection | null>(null)
   const [busy, setBusy] = useState(false)
-  const [renderLimit, setRenderLimit] = useState(60)
-  const [groups, setGroups] = useState<Array<{ id: string; name: string }>>([])
-  const [groupId, setGroupId] = useState<string | 'all' | 'none'>('all')
-  const [sortBy, setSortBy] = useState('created_desc')
-  const [tagMode, setTagMode] = useState<'and' | 'or'>('and')
-  const [stats, setStats] = useState<CollectionStats | null>(null)
-  const [dupInfo, setDupInfo] = useState<{ duplicates: Array<{ url: string; count: number }>; similar: Array<{ host: string; count: number }> } | null>(null)
-  const [showStats, setShowStats] = useState(false)
-  const [historyFor, setHistoryFor] = useState<Collection | null>(null)
-  const [history, setHistory] = useState<CollectionHistoryEntry[]>([])
-  const [groupManageOpen, setGroupManageOpen] = useState(false)
-  const [newGroupName, setNewGroupName] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -804,6 +1111,7 @@ function CollectionEditorModal({
           onChange={(v) => setForm((f) => ({ ...f, url: v }))}
           onBlur={() => void onUrlBlur()}
           placeholder="https://github.com/…"
+          mono
         />
       </Field>
       <div className="mb-3 grid grid-cols-2 gap-3">

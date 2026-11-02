@@ -1,0 +1,54 @@
+/**
+ * 全局字体系统（阶段四 · 外观个性化）。
+ *
+ * - 三个开源中文字体随应用打包（@font-face 由 loadFonts.ts 通过 JS import 注册，
+ *   本地加载，不依赖在线服务、不安装到系统）：
+ *   1. 思源黑体 SC（Source Han Sans CN）— SIL OFL 1.0
+ *   2. 更纱黑体 UI SC（Sarasa UI SC）— SIL OFL 1.0
+ *   3. 霞鹜文楷屏幕阅读版（LXGW WenKai Screen）— SIL OFL 1.0
+ *   各字体授权文本见 src/renderer/src/assets/fonts/LICENSES.md
+ * - 通过 <html data-font="..."> 切换，body 的 font-family 使用 --app-font 变量。
+ * - 与主题（data-theme）完全独立，可自由组合。
+ */
+
+/* ---------- 字体切换（--app-font 变量，body 消费） ---------- */
+
+:root,
+:root[data-font='system'] {
+  --app-font:
+    'Inter', 'Segoe UI Variable', 'Segoe UI', system-ui, 'PingFang SC',
+    'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+}
+:root[data-font='source-han'] {
+  --app-font: 'Source Han Sans SC', 'Segoe UI Variable', 'Segoe UI', system-ui,
+    'PingFang SC', 'Microsoft YaHei UI', sans-serif;
+}
+:root[data-font='sarasa'] {
+  --app-font: 'Sarasa UI SC', 'Segoe UI Variable', 'Segoe UI', system-ui,
+    'PingFang SC', 'Microsoft YaHei UI', sans-serif;
+}
+:root[data-font='lxgw'] {
+  --app-font: 'LXGW WenKai Screen', 'Segoe UI Variable', 'Segoe UI', system-ui,
+    'PingFang SC', 'Microsoft YaHei UI', sans-serif;
+}
+
+/* 字体设置元数据（设置页字体区消费） */
+:root[data-font='source-han'] {
+  --font-loaded: 1;
+}
+
+/* ---------- 标题字体（MyDesk 2.0 暖编辑式排版） ---------- */
+
+/* 衬线标题字体：思源宋体（本地打包，SIL OFL 1.0，@font-face 由 loadFonts.ts 注册） */
+:root {
+  --app-font-serif: 'Source Han Serif CN', 'Noto Serif SC', 'Songti SC', Georgia, serif;
+  /* 默认标题字体跟随正文字体；主题可通过 --heading-font-default 指定（Claude 主题为衬线） */
+  --heading-font: var(--heading-font-default, var(--app-font));
+}
+/* 用户设置：强制衬线标题 / 标题跟随正文字体 */
+:root[data-heading='serif'] {
+  --heading-font: var(--app-font-serif);
+}
+:root[data-heading='follow'] {
+  --heading-font: var(--app-font);
+}

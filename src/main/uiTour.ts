@@ -19,7 +19,10 @@ const PAGES = [
 ]
 
 const THEMES: Array<{ id: string; label: string }> = [
+  { id: 'claude', label: 'Claude 暖砂' },
   { id: 'holographic', label: '全息' },
+  { id: 'acid', label: '酸性' },
+  { id: 'neo', label: '野兽派' },
   { id: 'mint', label: '薄荷绿' },
   { id: 'lavender', label: '薰衣草' },
   { id: 'cream', label: '奶油白' },
@@ -38,8 +41,14 @@ export async function runUiTour(win: BrowserWindow): Promise<void> {
   // 可用 MYDESK_UI_PAGES="页面1|页面2" 限定页面，MYDESK_UI_THEME 限定单一主题
   const onlyPages = process.env.MYDESK_UI_PAGES ? process.env.MYDESK_UI_PAGES.split('|') : null
   const onlyTheme = process.env.MYDESK_UI_THEME ?? null
+  const onlyFont = process.env.MYDESK_UI_FONT ?? null
   const pages = onlyPages ? PAGES.filter((p) => onlyPages.includes(p)) : PAGES
   const themes = onlyTheme ? THEMES.filter((t) => t.id === onlyTheme) : THEMES
+  if (onlyFont) {
+    await win.webContents.executeJavaScript(
+      `document.documentElement.dataset.font = '${onlyFont}'`
+    )
+  }
 
   // 确保窗口真实可见：被遮挡/最小化时 rAF 冻结，动画停在初始帧导致截图空白
   win.webContents.setBackgroundThrottling(false)
@@ -117,12 +126,12 @@ export async function runUiTour(win: BrowserWindow): Promise<void> {
     console.log(`[ui-tour] ${theme.id} pages captured`)
   }
 
-  // 收尾：恢复默认主题与 Dashboard
+  // 收尾：恢复默认主题（Claude）与 Dashboard
   await clickNav('设置')
   await sleep(600)
   await win.webContents.executeJavaScript(`
     (() => {
-      const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('全息'))
+      const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Claude 暖砂'))
       if (b) b.click()
     })()
   `)

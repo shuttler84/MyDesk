@@ -110,10 +110,28 @@ function createWindow(): void {
     }
   })
 
+  // 启动前把持久化的主题/字体注入页面，避免先渲染默认样式再切换的闪烁
+  const bootQuery = ctx
+    ? (() => {
+        try {
+          const s = getSettings(ctx.db)
+          return { theme: s.theme, font: s.fontFamily, heading: s.headingFont }
+        } catch {
+          return { theme: '', font: '', heading: '' }
+        }
+      })()
+    : { theme: '', font: '', heading: '' }
+
   if (process.env.ELECTRON_RENDERER_URL) {
-    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+    const url = new URL(process.env.ELECTRON_RENDERER_URL)
+    if (bootQuery.theme) url.searchParams.set('bootTheme', bootQuery.theme)
+    if (bootQuery.font) url.searchParams.set('bootFont', bootQuery.font)
+    if (bootQuery.heading) url.searchParams.set('bootHeading', bootQuery.heading)
+    void mainWindow.loadURL(url.toString())
   } else {
-    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+      query: bootQuery.theme ? bootQuery : undefined
+    })
   }
 
   mainWindow.on('closed', () => {

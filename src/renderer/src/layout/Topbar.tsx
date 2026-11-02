@@ -1,15 +1,15 @@
 /**
- * 顶部工具栏（阶段二增强版）：
+ * 顶部工具栏（MyDesk 2.0 精简版）：
+ * - 左侧：当前页面上下文
  * - 全局搜索：实时搜索、分类筛选、关键词高亮、搜索历史（localStorage）、Ctrl+K 呼出、点击跳转
  * - 通知中心：统一接收主进程推送（任务提醒 / 备份 / 系统事件），支持清空
- * - 快速添加、主题切换、本地数据状态
+ * 快速新建已移入 Sidebar 与各页面操作区；主题切换移入 设置 → 外观。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Search, Plus, Bell, Palette, Database, CornerDownLeft, History, Trash2 } from 'lucide-react'
-import type { GlobalSearchResult, NotificationItem, ThemeName } from '@shared/types'
-import { useApp, THEME_LABELS } from '../store/AppStore'
-import { THEME_REGISTRY, themeSwatch } from '@shared/themes'
+import { Search, Bell, CornerDownLeft, History, Trash2 } from 'lucide-react'
+import type { GlobalSearchResult, NotificationItem } from '@shared/types'
+import { useApp } from '../store/AppStore'
 import { api } from '../api/client'
 import { Input, Tag } from '../components/ui'
 
@@ -18,6 +18,18 @@ const MODULE_NAMES: Record<GlobalSearchResult['module'], string> = {
   collections: '收藏',
   files: '文件索引',
   notes: '笔记'
+}
+
+const PAGE_CONTEXT: Record<string, string> = {
+  dashboard: '首页 · 个人工作空间',
+  tasks: '任务管理',
+  collections: '收藏库',
+  vault: '私密保险箱',
+  files: '文件索引',
+  notes: '笔记',
+  timeline: '时间轴',
+  data: '数据管理',
+  settings: '设置'
 }
 
 type SearchFilter = 'all' | GlobalSearchResult['module']
@@ -53,14 +65,13 @@ function Highlight({ text, start, length }: { text: string; start: number; lengt
   )
 }
 
-export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
-  const { settings, patchSettings, toast, jumpTo, jumpTarget, page } = useApp()
+export function Topbar() {
+  const { toast, jumpTo, jumpTarget, page } = useApp()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<GlobalSearchResult[] | null>(null)
   const [filter, setFilter] = useState<SearchFilter>('all')
   const [history, setHistory] = useState<string[]>(loadSearchHistory)
   const [showHistory, setShowHistory] = useState(false)
-  const [showThemeMenu, setShowThemeMenu] = useState(false)
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [showActivity, setShowActivity] = useState(false)
   const [unread, setUnread] = useState(0)
@@ -146,12 +157,6 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
     setShowHistory(false)
   }
 
-  const applyTheme = async (t: ThemeName) => {
-    await patchSettings({ theme: t })
-    setShowThemeMenu(false)
-    toast('success', `主题已切换：${THEME_LABELS[t]}`)
-  }
-
   // 跳转/切页时刷新通知列表
   useEffect(() => {
     void api.notifications.list().then((items) => {
@@ -166,9 +171,14 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
   }, [])
 
   return (
-    <header className="glass-card flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-5">
-      {/* 全局搜索 */}
-      <div ref={searchRef} className="relative w-80">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface px-5">
+      {/* 页面上下文 */}
+      <p className="hidden shrink-0 text-sm text-text-3 md:block">{PAGE_CONTEXT[page] ?? ''}</p>
+
+      <div className="flex-1" />
+
+      {/* 全局搜索（轻量入口） */}
+      <div ref={searchRef} className="relative w-72 lg:w-80">
         <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-3" />
         <Input
           ref={searchInputRef}
@@ -256,18 +266,6 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
         </AnimatePresence>
       </div>
 
-      <div className="flex-1" />
-
-      {/* 快速添加 */}
-      <button
-        onClick={onQuickAdd}
-        title="快速添加任务"
-        className="btn-primary flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium text-on-primary shadow-soft"
-      >
-        <Plus size={16} />
-        <span className="hidden sm:inline">快速添加</span>
-      </button>
-
       {/* 通知中心 */}
       <div className="relative">
         <button
@@ -323,54 +321,6 @@ export function Topbar({ onQuickAdd }: { onQuickAdd: () => void }) {
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-
-      {/* 主题切换 */}
-      <div className="relative">
-        <button
-          onClick={() => setShowThemeMenu((v) => !v)}
-          title="切换主题"
-          className="rounded-xl p-2 text-text-2 transition-colors hover:bg-surface-3 hover:text-text"
-        >
-          <Palette size={18} />
-        </button>
-        <AnimatePresence>
-          {showThemeMenu && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 4 }}
-              className="glass-card absolute right-0 top-11 z-40 w-44 rounded-xl border border-border p-1.5 shadow-lifted"
-            >
-              {THEME_REGISTRY.map((tm) => (
-                <button
-                  key={tm.id}
-                  onClick={() => void applyTheme(tm.id)}
-                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
-                    settings?.theme === tm.id
-                      ? 'bg-primary-soft font-medium text-primary'
-                      : 'text-text-2 hover:bg-surface-2'
-                  }`}
-                >
-                  <span
-                    className="h-4 w-4 rounded-full border border-black/10"
-                    style={{ background: themeSwatch(tm.id) }}
-                  />
-                  {THEME_LABELS[tm.id]}
-                </button>
-              ))}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* 数据状态 */}
-      <div
-        title="所有数据保存在本地 SQLite"
-        className="hidden items-center gap-1.5 rounded-xl border border-border bg-surface-2 px-2.5 py-1.5 text-xs text-text-3 lg:flex"
-      >
-        <Database size={13} className="text-success" />
-        本地
       </div>
     </header>
   )

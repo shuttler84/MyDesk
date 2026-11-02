@@ -1,8 +1,8 @@
 /**
- * Private Vault 私密保险箱。
+ * Private Vault 私密保险箱（MyDesk 2.0）。
  * 三态：no_vault（首次设置主密码）→ locked（解锁）→ unlocked（条目管理）。
  * 密码/密钥默认隐藏，点击显示、一键复制（复制后主进程定时清空剪贴板）。
- * 锁定状态下任何模块都无法访问保险箱数据。
+ * 锁定状态下任何模块都无法访问保险箱数据。安全逻辑与校验完全不变。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -29,6 +29,7 @@ import {
   Field,
   Input,
   Modal,
+  PageHeader,
   Select,
   SkeletonList,
   Tag,
@@ -52,6 +53,7 @@ export function VaultPage() {
   const [search, setSearch] = useState('')
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<VaultItem | null>(null)
+  const [pwModalOpen, setPwModalOpen] = useState(false)
 
   const loadStatus = useCallback(async () => {
     try {
@@ -94,7 +96,11 @@ export function VaultPage() {
   }
 
   if (status === null) {
-    return <SkeletonList rows={3} />
+    return (
+      <div className="mx-auto max-w-3xl">
+        <SkeletonList rows={3} />
+      </div>
+    )
   }
 
   // ---------- 首次设置 ----------
@@ -130,52 +136,56 @@ export function VaultPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-auto flex items-center gap-2 text-xl font-bold text-text">
-          <ShieldCheck size={20} className="text-success" /> 私密保险箱
-          <Tag className="!bg-success/10 !text-success">已解锁</Tag>
-        </h1>
+    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+      <PageHeader
+        title="私密保险箱"
+        description={`已解锁 · 闲置 ${status.autoLockMinutes} 分钟后自动锁定 · AES-256-GCM · Argon2id${
+          status.kdf ? `（${status.kdf.memoryKiB / 1024} MiB / t=${status.kdf.iterations} / p=${status.kdf.parallelism}）` : ''
+        }`}
+        actions={
+          <>
+            <Button onClick={() => setPwModalOpen(true)}>
+              <KeyRound size={15} /> 修改主密码
+            </Button>
+            <Button
+              onClick={async () => {
+                await api.vault.lock()
+                toast('info', '保险箱已锁定')
+                await loadStatus()
+              }}
+            >
+              <Lock size={15} /> 立即锁定
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                setEditing(null)
+                setEditorOpen(true)
+              }}
+            >
+              <Plus size={16} /> 新建条目
+            </Button>
+          </>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
           <SearchIcon size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-3" />
-          <Input value={search} onChange={setSearch} placeholder="搜索条目…" className="!w-56 !pl-8" />
+          <Input value={search} onChange={setSearch} placeholder="搜索条目…" className="!w-56 !py-1.5 !pl-8" />
         </div>
-        <Button
-          onClick={async () => {
-            await api.vault.lock()
-            toast('info', '保险箱已锁定')
-            await loadStatus()
-          }}
-        >
-          <Lock size={15} /> 立即锁定
-        </Button>
-        <Button
-          variant="primary"
-          onClick={() => {
-            setEditing(null)
-            setEditorOpen(true)
-          }}
-        >
-          <Plus size={16} /> 新建条目
-        </Button>
+        <div className="flex flex-wrap gap-1.5">
+          <Tag active={category === 'all'} onClick={() => setCategory('all')}>全部（{items?.length ?? 0}）</Tag>
+          {(Object.keys(CATEGORY_LABELS) as VaultCategory[]).map((c) => {
+            const count = items?.filter((i) => i.category === c).length ?? 0
+            return (
+              <Tag key={c} active={category === c} onClick={() => setCategory(c)}>
+                {CATEGORY_LABELS[c]}（{count}）
+              </Tag>
+            )
+          })}
+        </div>
       </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        <Tag active={category === 'all'} onClick={() => setCategory('all')}>全部（{items?.length ?? 0}）</Tag>
-        {(Object.keys(CATEGORY_LABELS) as VaultCategory[]).map((c) => {
-          const count = items?.filter((i) => i.category === c).length ?? 0
-          return (
-            <Tag key={c} active={category === c} onClick={() => setCategory(c)}>
-              {CATEGORY_LABELS[c]} ({count})
-            </Tag>
-          )
-        })}
-      </div>
-
-      <p className="text-xs text-text-3">
-        闲置 {status.autoLockMinutes} 分钟后自动锁定 · AES-256-GCM · Argon2id
-        ({status.kdf ? `${status.kdf.memoryKiB / 1024} MiB / t=${status.kdf.iterations} / p=${status.kdf.parallelism}` : ''})
-      </p>
 
       {filtered === null ? (
         <SkeletonList rows={3} />
@@ -183,7 +193,11 @@ export function VaultPage() {
         <EmptyState
           icon={<KeyRound size={36} />}
           title={items && items.length > 0 ? '没有符合筛选条件的条目' : '保险箱是空的'}
-          hint="添加网站账号、API 密钥、服务器信息或私密笔记。所有内容都使用你的主密码加密。"
+          hint={
+            items && items.length > 0
+              ? '试试调整搜索关键词或分类筛选。'
+              : '添加网站账号、API 密钥、服务器信息或私密笔记。所有内容都使用你的主密码加密（AES-256-GCM），程序本身也无法读取明文。'
+          }
           action={
             <Button variant="primary" onClick={() => { setEditing(null); setEditorOpen(true) }}>
               <Plus size={16} /> 新建条目
@@ -193,7 +207,9 @@ export function VaultPage() {
       ) : (
         [...grouped.entries()].map(([cat, list]) => (
           <div key={cat}>
-            <h3 className="mb-2 text-sm font-semibold text-text-2">{CATEGORY_LABELS[cat]}</h3>
+            <h3 className="font-heading mb-2 text-sm font-semibold tracking-wide text-text-2">
+              {CATEGORY_LABELS[cat]} · {list.length}
+            </h3>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <AnimatePresence initial={false}>
                 {list.map((item) => (
@@ -229,7 +245,7 @@ export function VaultPage() {
           await loadStatus()
         }}
       />
-      <ChangePasswordModal onDone={loadStatus} />
+      <ChangePasswordModal open={pwModalOpen} onClose={() => setPwModalOpen(false)} onDone={loadStatus} />
     </div>
   )
 }
@@ -269,9 +285,10 @@ function SetupView({ onDone }: { onDone: () => Promise<void> }) {
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-soft text-primary">
             <ShieldCheck size={28} />
           </div>
-          <h1 className="text-lg font-bold text-text">设置你的私密保险箱</h1>
+          <h1 className="font-heading text-lg font-bold text-text">设置你的私密保险箱</h1>
           <p className="text-xs leading-5 text-text-3">
-            设置一个独立的主密码。数据使用 Argon2id + AES-256-GCM 加密。
+            设置一个独立的主密码。数据使用 Argon2id 派生密钥 + AES-256-GCM 加密，
+            主密码不存储在任何地方。
             <br />
             <b className="text-danger">主密码一旦丢失，加密内容将无法找回。</b>
           </p>
@@ -321,9 +338,9 @@ function LockedView({ status, onUnlocked }: { status: VaultStatus; onUnlocked: (
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-3 text-text-2">
             <Lock size={28} />
           </div>
-          <h1 className="text-lg font-bold text-text">保险箱已锁定</h1>
+          <h1 className="font-heading text-lg font-bold text-text">保险箱已锁定</h1>
           <p className="text-xs text-text-3">
-            输入主密码解锁。闲置 {status.autoLockMinutes} 分钟后将自动锁定。
+            输入主密码解锁。闲置 {status.autoLockMinutes} 分钟后将自动锁定，剪贴板中的密钥也会被清空。
           </p>
         </div>
         <Field label="主密码">
@@ -387,7 +404,7 @@ function VaultItemCard({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-text">{item.name}</p>
           {item.username && <p className="truncate text-xs text-text-2">👤 {item.username}</p>}
-          {item.url && <p className="truncate text-xs text-text-3">{item.url}</p>}
+          {item.url && <p className="truncate font-mono text-xs text-text-3">{item.url}</p>}
         </div>
         <div className="flex shrink-0 gap-0.5">
           <MiniBtn title="编辑" onClick={onEdit}><Pencil size={13} /></MiniBtn>
@@ -488,7 +505,7 @@ function VaultEditorModal({
   return (
     <Modal open={open} onClose={onClose} title={editing ? '编辑条目' : '新建条目'} wide>
       <div className="mb-3 grid grid-cols-2 gap-3">
-        <Field label="Name *">
+        <Field label="名称 *">
           <Input value={form.name} onChange={(v) => setForm((f) => ({ ...f, name: v }))} autoFocus />
         </Field>
         <Field label="分类">
@@ -504,7 +521,7 @@ function VaultEditorModal({
           <Input value={form.username ?? ''} onChange={(v) => setForm((f) => ({ ...f, username: v }))} />
         </Field>
         <Field label="URL">
-          <Input value={form.url ?? ''} onChange={(v) => setForm((f) => ({ ...f, url: v }))} placeholder="https://…" />
+          <Input value={form.url ?? ''} onChange={(v) => setForm((f) => ({ ...f, url: v }))} placeholder="https://…" mono />
         </Field>
       </div>
       <Field label="密码 / API 密钥 / 密钥">
@@ -531,9 +548,16 @@ function VaultEditorModal({
 
 // ---------- 修改主密码 ----------
 
-function ChangePasswordModal({ onDone }: { onDone: () => Promise<void> }) {
+function ChangePasswordModal({
+  open,
+  onClose,
+  onDone
+}: {
+  open: boolean
+  onClose: () => void
+  onDone: () => Promise<void>
+}) {
   const { toast } = useApp()
-  const [open, setOpen] = useState(false)
   const [cur, setCur] = useState('')
   const [nw1, setNw1] = useState('')
   const [nw2, setNw2] = useState('')
@@ -552,7 +576,7 @@ function ChangePasswordModal({ onDone }: { onDone: () => Promise<void> }) {
     try {
       await api.vault.changePassword(cur, nw1)
       toast('success', '主密码已修改，全部数据已用新密钥重新加密。')
-      setOpen(false)
+      onClose()
       setCur('')
       setNw1('')
       setNw2('')
@@ -565,30 +589,25 @@ function ChangePasswordModal({ onDone }: { onDone: () => Promise<void> }) {
   }
 
   return (
-    <>
-      <Button onClick={() => setOpen(true)}>
-        <KeyRound size={15} /> 修改主密码
-      </Button>
-      <Modal open={open} onClose={() => setOpen(false)} title="修改主密码">
-        <Field label="当前主密码">
-          <Input type="password" value={cur} onChange={setCur} autoFocus />
-        </Field>
-        <Field label="新主密码（至少 8 位）">
-          <Input type="password" value={nw1} onChange={setNw1} />
-        </Field>
-        <Field label="确认新密码">
-          <Input type="password" value={nw2} onChange={setNw2} />
-        </Field>
-        <p className="mb-4 text-xs text-text-3">
-          整个保险箱将使用新派生的密钥重新加密（密钥轮换）。此操作无法找回已忘记的密码。
-        </p>
-        <div className="flex justify-end gap-2">
-          <Button onClick={() => setOpen(false)}>取消</Button>
-          <Button variant="primary" onClick={() => void submit()} disabled={busy || !cur || !nw1 || !nw2}>
-            轮换密钥并保存
-          </Button>
-        </div>
-      </Modal>
-    </>
+    <Modal open={open} onClose={onClose} title="修改主密码">
+      <Field label="当前主密码">
+        <Input type="password" value={cur} onChange={setCur} autoFocus />
+      </Field>
+      <Field label="新主密码（至少 8 位）">
+        <Input type="password" value={nw1} onChange={setNw1} />
+      </Field>
+      <Field label="确认新密码">
+        <Input type="password" value={nw2} onChange={setNw2} />
+      </Field>
+      <p className="mb-4 text-xs text-text-3">
+        整个保险箱将使用新派生的密钥重新加密（密钥轮换）。此操作无法找回已忘记的密码。
+      </p>
+      <div className="flex justify-end gap-2">
+        <Button onClick={onClose}>取消</Button>
+        <Button variant="primary" onClick={() => void submit()} disabled={busy || !cur || !nw1 || !nw2}>
+          轮换密钥并保存
+        </Button>
+      </div>
+    </Modal>
   )
 }

@@ -19,7 +19,7 @@ import {
 import type { Note, NoteAttachment, NoteInput } from '@shared/types'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
-import { Button, Card, EmptyState, Input, Modal, SkeletonList, Tag } from '../components/ui'
+import { Button, EmptyState, Input, Modal, PageHeader, SkeletonList, Tag } from '../components/ui'
 
 export function NotesPage() {
   const { toast, jumpTarget } = useApp()
@@ -59,32 +59,38 @@ export function NotesPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-auto text-xl font-bold text-text">笔记</h1>
+      <PageHeader
+        title="笔记"
+        description="用 Markdown 记录，支持附件、分类与标签。"
+        actions={
+          <Button variant="primary" onClick={() => void createNote()}>
+            <Plus size={16} /> 新建笔记
+          </Button>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative">
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-3" />
-          <Input value={search} onChange={setSearch} placeholder="搜索笔记…" className="!w-56 !pl-8" />
+          <Input value={search} onChange={setSearch} placeholder="搜索笔记…" className="!w-56 !py-1.5 !pl-8" />
         </div>
         {categories.length > 0 && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Tag active={category === null} onClick={() => setCategory(null)}>全部</Tag>
             {categories.map((c) => (
               <Tag key={c} active={category === c} onClick={() => setCategory(c)}>{c}</Tag>
             ))}
           </div>
         )}
-        <Button variant="primary" onClick={() => void createNote()}>
-          <Plus size={16} /> 新建笔记
-        </Button>
       </div>
 
       <div className="flex min-h-0 flex-1 gap-4">
         {/* 笔记列表 */}
-        <div className="flex w-64 shrink-0 flex-col gap-2 overflow-y-auto pr-1">
+        <div className="flex w-64 shrink-0 flex-col gap-1.5 overflow-y-auto pr-1">
           {notes === null ? (
             <SkeletonList rows={5} />
           ) : notes.length === 0 ? (
-            <EmptyState icon={<StickyNote size={28} />} title="暂无笔记" hint="创建你的第一篇笔记。" />
+            <EmptyState icon={<StickyNote size={28} />} title="暂无笔记" hint="点击右上角「新建笔记」开始记录。" />
           ) : (
             <AnimatePresence initial={false}>
               {notes.map((n) => (
@@ -95,17 +101,17 @@ export function NotesPage() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   onClick={() => setActiveId(n.id)}
-                  className={`glass-card rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
+                  className={`rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
                     activeId === n.id
                       ? 'border-primary/50 bg-primary-soft/50'
-                      : 'border-border hover:border-border-strong'
+                      : 'border-transparent hover:border-border hover:bg-surface-2'
                   }`}
                 >
                   <p className="truncate text-sm font-medium text-text">{n.title || '（无标题）'}</p>
                   <p className="truncate text-xs text-text-3">
                     {n.content.replace(/[#*`>\-\[\]()!]/g, '').slice(0, 40) || '空笔记'}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-text-3">
+                  <p className="mt-0.5 text-[10px] tabular-nums text-text-3">
                     {n.updatedAt.slice(0, 10)}
                     {n.category ? ` · ${n.category}` : ''}
                     {n.tags.length ? ` · ${n.tags.join(', ')}` : ''}
@@ -242,7 +248,7 @@ function NoteEditor({
   if (!note) return <SkeletonList rows={3} />
 
   return (
-    <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-surface-2/40">
       {/* 工具行 */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
         <Button variant={preview ? 'ghost' : 'secondary'} className="!px-2.5 !py-1.5 text-xs" onClick={() => setPreview(false)}>
@@ -313,10 +319,10 @@ function NoteEditor({
         </div>
       )}
 
-      {/* 正文 */}
+      {/* 正文（舒适阅读宽度） */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {preview ? (
-          <div className="md-body px-6 py-4">
+          <div className="md-body mx-auto max-w-3xl px-6 py-5">
             <MarkdownWithAttachments content={content} loadImage={loadImage} />
           </div>
         ) : (
@@ -327,7 +333,7 @@ function NoteEditor({
               setDirty(true)
             }}
             placeholder={'# 标题\n\n用 **Markdown** 书写…\n\n```js\nconsole.log("支持代码块")\n```'}
-            className="h-full min-h-[320px] w-full resize-none bg-transparent px-6 py-4 font-mono text-sm leading-7 text-text outline-none"
+            className="mx-auto block h-full min-h-[320px] w-full max-w-3xl resize-none bg-transparent px-6 py-5 font-mono text-sm leading-7 text-text outline-none"
           />
         )}
       </div>
@@ -353,7 +359,7 @@ function NoteEditor({
           </Button>
         </div>
       </Modal>
-    </Card>
+    </div>
   )
 }
 

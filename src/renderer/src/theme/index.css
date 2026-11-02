@@ -10,7 +10,9 @@ body,
 
 body {
   background: var(--app-bg);
-  @apply text-text font-sans antialiased;
+  color: rgb(var(--c-text));
+  font-family: var(--app-font);
+  -webkit-font-smoothing: antialiased;
   overflow: hidden;
   transition: background 0.45s ease;
 }

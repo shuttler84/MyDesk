@@ -14,8 +14,8 @@ export async function runE2EProbe(win: BrowserWindow): Promise<void> {
   win.focus()
   await sleep(2500)
 
-  // 1. 点击顶栏 Quick Add
-  await js(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes('快速添加')).click()`)
+  // 1. 点击侧边栏「新建」（MyDesk 2.0 起新建入口在 Sidebar）
+  await js(`[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='新建').click()`)
   await sleep(800)
   // 2. 填写任务标题（React 受控输入）
   await js(`

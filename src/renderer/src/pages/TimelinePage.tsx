@@ -10,7 +10,7 @@ import { Activity, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import type { DailyCount, TimelineStats } from '@shared/types'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
-import { Button, Card, EmptyState, Modal, SkeletonList, Tag } from '../components/ui'
+import { Button, Card, EmptyState, Modal, PageHeader, PageToolbar, SectionHeading, SkeletonList, Tag } from '../components/ui'
 
 const ACTIVITY_LABELS: Record<string, string> = {
   task_created: '任务创建',
@@ -78,34 +78,46 @@ export function TimelinePage() {
     return map
   }, [stats, heatKind])
 
+  const sum = (list: DailyCount[]): number => list.reduce((s, d) => s + d.count, 0)
+
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-auto text-xl font-bold text-text">时间轴</h1>
+      <PageHeader title="时间轴" description="你的每一次整理都被本地记录。" />
+
+      <PageToolbar>
         <label className="flex items-center gap-2 text-xs text-text-2">
-          从 <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-primary" />
+          从 <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-xl border border-border bg-surface-2 px-3 py-1.5 text-sm outline-none focus:border-primary" />
         </label>
         <label className="flex items-center gap-2 text-xs text-text-2">
-          到 <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-primary" />
+          到 <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-xl border border-border bg-surface-2 px-3 py-1.5 text-sm outline-none focus:border-primary" />
         </label>
         {(from || to) && (
-          <Button variant="ghost" className="text-xs" onClick={() => { setFrom(''); setTo('') }}>
+          <Button variant="ghost" size="sm" onClick={() => { setFrom(''); setTo('') }}>
             清除
           </Button>
         )}
-        <Button className="text-xs" onClick={() => void load()}>
+        <div className="flex-1" />
+        <Button size="sm" onClick={() => void load()}>
           <RefreshCw size={13} /> 刷新
         </Button>
-      </div>
+      </PageToolbar>
 
       {stats === null ? (
         <SkeletonList rows={5} />
       ) : (
         <>
+          {/* 关键统计 */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <KeyStat label="任务完成" value={sum(stats.tasks)} />
+            <KeyStat label="新增收藏" value={sum(stats.collections)} />
+            <KeyStat label="新建笔记" value={sum(stats.notes)} />
+            <KeyStat label="索引文件" value={sum(stats.files)} />
+          </div>
+
           {/* 年度热力图 */}
           <Card className="p-5">
             <div className="mb-3 flex flex-wrap items-center gap-3">
-              <h3 className="text-sm font-semibold text-text">年度活动热力图</h3>
+              <SectionHeading title="年度活动热力图" />
               <div className="flex items-center gap-1">
                 <Button className="!px-1.5 !py-1" onClick={() => setYear((y) => y - 1)}>
                   <ChevronLeft size={14} />
@@ -144,7 +156,7 @@ export function TimelinePage() {
           {/* 月度统计 + 分布 */}
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <Card className="p-5">
-              <h3 className="mb-3 text-sm font-semibold text-text">每月任务完成</h3>
+              <SectionHeading title="每月任务完成" />
               {stats.monthlyTasks.length === 0 ? (
                 <p className="py-6 text-center text-xs text-text-3">该范围内没有数据</p>
               ) : (
@@ -166,7 +178,7 @@ export function TimelinePage() {
             </Card>
 
             <Card className="p-5">
-              <h3 className="mb-3 text-sm font-semibold text-text">收藏类型分布</h3>
+              <SectionHeading title="收藏类型分布" />
               {stats.typeDistribution.length === 0 ? (
                 <p className="py-6 text-center text-xs text-text-3">该范围内没有数据</p>
               ) : (
@@ -191,7 +203,7 @@ export function TimelinePage() {
           {/* 标签使用 Top */}
           {stats.tagUsage.length > 0 && (
             <Card className="p-5">
-              <h3 className="mb-3 text-sm font-semibold text-text">标签使用（Top {stats.tagUsage.length}）</h3>
+              <SectionHeading title={`标签使用（Top ${stats.tagUsage.length}）`} />
               <div className="flex flex-wrap gap-2">
                 {stats.tagUsage.map((t) => (
                   <span key={t.tag} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-soft px-2.5 py-1 text-xs text-primary">
@@ -213,9 +225,10 @@ export function TimelinePage() {
 
           {/* 最近活动 */}
           <Card className="p-5">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text">
-              <Activity size={15} className="text-primary" /> 最近活动
-            </h3>
+            <SectionHeading
+              title="最近活动"
+              extra={<Activity size={15} className="text-primary" />}
+            />
             {stats.activities.length === 0 ? (
               <EmptyState
                 icon={<Activity size={30} />}
@@ -389,6 +402,15 @@ function DailyCard({
       <p className="mt-1.5 text-[10px] text-text-3">
         {recent.length > 0 ? `${recent[0].date} → ${recent[recent.length - 1].date}` : ''}
       </p>
+    </Card>
+  )
+}
+
+function KeyStat({ label, value }: { label: string; value: number }) {
+  return (
+    <Card variant="subtle" className="px-4 py-3">
+      <p className="font-mono text-xl font-bold tabular-nums text-text">{value}</p>
+      <p className="mt-0.5 text-[11px] text-text-3">{label}</p>
     </Card>
   )
 }

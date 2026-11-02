@@ -9,9 +9,57 @@
  *    有各自的表达（浅色主题为纯色/柔和阴影，Holographic 为虹彩渐变/棱镜光晕）。
  *
  * 新增主题：复制任意一组变量块，调整数值，并在 src/shared/themes.ts 注册。
+ * 标题字体：主题可通过 --heading-font-default 指定默认标题字体（默认 var(--app-font)），
+ * 用户设置 data-heading='serif'|'follow' 可强制覆盖（见 fonts.css）。
  */
 
-/* ============ Holographic · 全息数字工作台（默认主题） ============ */
+/* ============ Claude · 暖编辑式（MyDesk 2.0 默认主题） ============ */
+:root[data-theme='claude'] {
+  --c-page: 250 249 245;         /* #FAF9F5 */
+  --c-surface: 245 240 232;      /* #F5F0E8 侧栏/顶栏 */
+  --c-surface-2: 239 233 222;    /* #EFE9DE 输入框/次级面板 */
+  --c-surface-3: 232 224 210;    /* #E8E0D2 悬停/激活 */
+  --c-card: 239 233 222;         /* #EFE9DE 暖色调卡片 */
+  --c-border: 230 223 216;       /* #E6DFD8 */
+  --c-border-strong: 214 204 192;
+  --c-text: 20 20 19;            /* #141413 */
+  --c-text-2: 61 61 58;          /* #3D3D3A 正文 */
+  --c-text-3: 108 106 100;       /* #6C6A64 辅助 */
+  --c-primary: 204 120 92;       /* #CC785C 珊瑚陶土 */
+  --c-primary-soft: 243 229 219;
+  --c-on-primary: 255 255 255;
+  --c-accent: 169 88 62;         /* #A9583E 深陶土 */
+  --c-danger: 198 69 69;         /* #C64545 */
+  --c-success: 93 184 114;       /* #5DB872 */
+  --c-warning: 212 160 23;       /* #D4A017 */
+  --c-glass-blur: 0px;
+  --c-card-alpha: 1;
+  --c-shadow-strength: 0.05;
+
+  --app-bg: rgb(var(--c-page));
+  --btn-primary-bg: rgb(var(--c-primary));
+  --btn-primary-bg-size: auto;
+  --btn-primary-hover-glow: none;
+  --btn-primary-hover-y: 0px;
+  --focus-glow: 0 0 0 3px rgb(204 120 92 / 0.22);
+  --card-hover-glow: none;
+  --card-border-hover: var(--c-border-strong);
+  --shadow-soft: 0 1px 3px rgb(28 25 20 / 0.05), 0 1px 2px rgb(28 25 20 / 0.03);
+  --shadow-lifted: 0 6px 20px -6px rgb(28 25 20 / 0.12), 0 2px 6px rgb(28 25 20 / 0.05);
+  --shadow-modal: 0 20px 50px -12px rgb(28 25 20 / 0.22);
+
+  /* Claude 默认使用衬线标题（可被 data-heading 用户设置覆盖） */
+  --heading-font-default: var(--app-font-serif);
+}
+/* Claude 主按钮：悬停加深（平静克制，不发光不上浮） */
+:root[data-theme='claude'] .btn-primary:hover:not(:disabled) {
+  background: rgb(169 88 62);
+}
+:root[data-theme='claude'] .btn-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* ============ Holographic · 全息数字工作台 ============ */
 :root[data-theme='holographic'] {
   --c-page: 10 10 31;            /* #0A0A1F 深空黑紫 */
   --c-surface: 24 18 44;         /* 导航/顶栏 半透明暗紫 */
@@ -47,6 +95,9 @@
   --focus-glow: 0 0 0 3px rgba(168, 85, 247, 0.28);
   --card-hover-glow: 0 10px 32px -8px rgba(168, 85, 247, 0.30), 0 0 24px -10px rgba(0, 212, 255, 0.25);
   --card-border-hover: 116 104 172;
+  --shadow-soft: 0 2px 12px -2px rgb(0 0 0 / 0.5), 0 1px 3px rgb(0 0 0 / 0.4);
+  --shadow-lifted: 0 10px 30px -6px rgb(0 0 0 / 0.6), 0 0 24px -10px rgb(168 85 247 / 0.25);
+  --shadow-modal: 0 24px 60px -12px rgb(0 0 0 / 0.7), 0 0 40px -12px rgb(168 85 247 / 0.3);
 }
 
 /* Holographic 深空背景光斑：缓慢漂移（禁用动画/减少动画时静止） */
@@ -112,6 +163,9 @@
   --focus-glow: 0 0 0 3px rgb(var(--c-primary) / 0.18);
   --card-hover-glow: none;
   --card-border-hover: var(--c-border-strong);
+  --shadow-soft: 0 2px 12px -2px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.04);
+  --shadow-lifted: 0 10px 30px -6px rgb(0 0 0 / 0.14), 0 4px 8px rgb(0 0 0 / 0.06);
+  --shadow-modal: 0 24px 60px -12px rgb(0 0 0 / 0.28);
 }
 
 /* ============ Lavender · 薰衣草 ============ */
@@ -145,6 +199,9 @@
   --focus-glow: 0 0 0 3px rgb(var(--c-primary) / 0.18);
   --card-hover-glow: none;
   --card-border-hover: var(--c-border-strong);
+  --shadow-soft: 0 2px 12px -2px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.04);
+  --shadow-lifted: 0 10px 30px -6px rgb(0 0 0 / 0.14), 0 4px 8px rgb(0 0 0 / 0.06);
+  --shadow-modal: 0 24px 60px -12px rgb(0 0 0 / 0.28);
 }
 
 /* ============ Cream · 奶油白 ============ */
@@ -178,6 +235,9 @@
   --focus-glow: 0 0 0 3px rgb(var(--c-primary) / 0.18);
   --card-hover-glow: none;
   --card-border-hover: var(--c-border-strong);
+  --shadow-soft: 0 2px 12px -2px rgb(0 0 0 / 0.07), 0 1px 3px rgb(0 0 0 / 0.04);
+  --shadow-lifted: 0 10px 30px -6px rgb(0 0 0 / 0.12), 0 4px 8px rgb(0 0 0 / 0.05);
+  --shadow-modal: 0 24px 60px -12px rgb(0 0 0 / 0.25);
 }
 
 /* ============ Midnight · 深空暗色 ============ */
@@ -211,6 +271,9 @@
   --focus-glow: 0 0 0 3px rgb(var(--c-primary) / 0.3);
   --card-hover-glow: 0 10px 28px -10px rgb(0 0 0 / 0.5);
   --card-border-hover: var(--c-border-strong);
+  --shadow-soft: 0 2px 12px -2px rgb(0 0 0 / 0.5);
+  --shadow-lifted: 0 10px 30px -6px rgb(0 0 0 / 0.6);
+  --shadow-modal: 0 24px 60px -12px rgb(0 0 0 / 0.7);
 }
 
 /* ============ Glass · 透明玻璃 ============ */
@@ -248,4 +311,162 @@
   --focus-glow: 0 0 0 3px rgb(var(--c-primary) / 0.22);
   --card-hover-glow: none;
   --card-border-hover: var(--c-border-strong);
+  --shadow-soft: 0 2px 12px -2px rgb(0 0 0 / 0.10);
+  --shadow-lifted: 0 10px 30px -6px rgb(0 0 0 / 0.16);
+  --shadow-modal: 0 24px 60px -12px rgb(0 0 0 / 0.30);
+}
+
+/* ============ Acid Graphics · 酸性平面设计 ============ */
+:root[data-theme='acid'] {
+  --c-page: 10 10 10;            /* #0A0A0A */
+  --c-surface: 21 21 21;         /* #151515 */
+  --c-surface-2: 16 16 16;
+  --c-surface-3: 32 32 32;       /* #202020 */
+  --c-card: 21 21 21;
+  --c-border: 58 58 58;
+  --c-border-strong: 57 255 20;  /* #39FF14 荧光绿边框 */
+  --c-text: 245 245 245;         /* #F5F5F5 */
+  --c-text-2: 160 160 160;       /* #A0A0A0 */
+  --c-text-3: 120 120 120;
+  --c-primary: 57 255 20;        /* #39FF14 荧光绿 */
+  --c-primary-soft: 24 48 12;
+  --c-on-primary: 10 10 10;      /* 荧光绿底 + 黑字 */
+  --c-accent: 160 32 240;        /* #A020F0 电紫 */
+  --c-danger: 255 51 85;
+  --c-success: 57 255 20;
+  --c-warning: 230 255 0;        /* #E6FF00 酸性黄 */
+  --c-glass-blur: 0px;
+  --c-card-alpha: 1;
+  --c-shadow-strength: 0;
+
+  --app-bg:
+    repeating-linear-gradient(0deg, rgba(57 255 20 / 0.025) 0 1px, transparent 1px 3px),
+    radial-gradient(900px 500px at 85% -5%, rgb(160 32 240 / 0.10), transparent 55%),
+    rgb(var(--c-page));
+  --btn-primary-bg: rgb(var(--c-primary));
+  --btn-primary-bg-size: auto;
+  --btn-primary-hover-glow: none;
+  --btn-primary-hover-y: 0px;
+  --focus-glow: 0 0 0 2px rgb(57 255 20 / 0.55);
+  --card-hover-glow: none;
+  --card-border-hover: 57 255 20;
+  --shadow-soft: none;
+  --shadow-lifted: none;
+  --shadow-modal: -4px 0 0 0 rgb(160 32 240 / 0.55), 4px 4px 0 0 rgb(0 0 0 / 0.9);
+}
+
+/* Acid：直角 + 硬边阴影 + 荧光边框（仅卡片/按钮/输入框，不影响圆点/进度条） */
+:root[data-theme='acid'] .glass-card,
+:root[data-theme='acid'] .btn-primary,
+:root[data-theme='acid'] .field-input,
+:root[data-theme='acid'] button,
+:root[data-theme='acid'] input,
+:root[data-theme='acid'] select,
+:root[data-theme='acid'] textarea {
+  border-radius: 2px;
+}
+:root[data-theme='acid'] .glass-card {
+  box-shadow: 4px 4px 0 0 rgb(0 0 0 / 0.85), -2px -2px 0 0 rgb(160 32 240 / 0.25);
+  border-color: rgb(70 70 70);
+}
+:root[data-theme='acid'] .glass-card:hover {
+  border-color: rgb(var(--c-primary));
+  box-shadow: 4px 4px 0 0 rgb(57 255 20 / 0.35), -2px -2px 0 0 rgb(160 32 240 / 0.4);
+}
+:root[data-theme='acid'] .btn-primary:hover:not(:disabled) {
+  background: rgb(var(--c-warning));
+  box-shadow: 3px 3px 0 0 rgb(160 32 240 / 0.7);
+}
+:root[data-theme='acid'] .btn-primary:active:not(:disabled) {
+  transform: translate(2px, 2px);
+}
+/* Acid 标题故障风（悬停时才出现，局部装饰） */
+:root[data-theme='acid'] h1 {
+  letter-spacing: 0.01em;
+}
+:root[data-theme='acid'] h1:hover {
+  text-shadow:
+    -2px 0 0 rgb(255 6 199 / 0.7),
+    2px 0 0 rgb(0 212 255 / 0.7);
+}
+
+/* ============ Neo-Brutalist Playful · 俏皮野兽派 ============ */
+:root[data-theme='neo'] {
+  --c-page: 255 255 255;         /* #FFFFFF */
+  --c-surface: 255 253 248;      /* #FFFDF8 暖白 */
+  --c-surface-2: 255 255 255;
+  --c-surface-3: 255 230 109;    /* #FFE66D 柠檬黄 */
+  --c-card: 255 255 255;
+  --c-border: 17 17 17;          /* #111111 墨黑 */
+  --c-border-strong: 17 17 17;
+  --c-text: 17 17 17;            /* #111111 */
+  --c-text-2: 68 68 68;
+  --c-text-3: 130 130 130;
+  --c-primary: 255 107 107;      /* #FF6B6B 珊瑚红 */
+  --c-primary-soft: 255 224 224; /* 浅珊瑚粉（选中态底色，保证珊瑚红字可读） */
+  --c-on-primary: 17 17 17;      /* 彩色底 + 墨黑字 */
+  --c-accent: 78 205 196;        /* #4ECDC4 薄荷青 */
+  --c-danger: 214 69 69;
+  --c-success: 78 205 196;
+  --c-warning: 255 230 109;
+  --c-glass-blur: 0px;
+  --c-card-alpha: 1;
+  --c-shadow-strength: 0;
+
+  --app-bg:
+    radial-gradient(500px 300px at 92% -4%, rgb(255 230 109 / 0.35), transparent 60%),
+    radial-gradient(460px 320px at -4% 30%, rgb(78 205 196 / 0.18), transparent 60%),
+    radial-gradient(520px 340px at 60% 112%, rgb(255 107 107 / 0.14), transparent 60%),
+    rgb(var(--c-page));
+  --btn-primary-bg: rgb(var(--c-primary));
+  --btn-primary-bg-size: auto;
+  --btn-primary-hover-glow: 4px 4px 0 0 rgb(17 17 17);
+  --btn-primary-hover-y: -2px;
+  --focus-glow: 0 0 0 3px rgb(78 205 196 / 0.7);
+  --card-hover-glow: 6px 6px 0 0 rgb(17 17 17);
+  --card-border-hover: 17 17 17;
+  --shadow-soft: 4px 4px 0 0 rgb(17 17 17);
+  --shadow-lifted: 6px 6px 0 0 rgb(17 17 17);
+  --shadow-modal: 10px 10px 0 0 rgb(17 17 17);
+}
+
+/* Neo：粗黑边框 + 方角 + 按压收缩（野兽派核心语言） */
+:root[data-theme='neo'] .glass-card,
+:root[data-theme='neo'] .field-input,
+:root[data-theme='neo'] button,
+:root[data-theme='neo'] input,
+:root[data-theme='neo'] select,
+:root[data-theme='neo'] textarea {
+  border-radius: 0;
+}
+:root[data-theme='neo'] .glass-card {
+  border: 2px solid rgb(17 17 17);
+  border-color: rgb(17 17 17);
+}
+:root[data-theme='neo'] .glass-card:hover {
+  transform: translate(-2px, -2px);
+}
+:root[data-theme='neo'] .btn-primary,
+:root[data-theme='neo'] button {
+  border: 2px solid rgb(17 17 17);
+  border-radius: 0;
+}
+:root[data-theme='neo'] .btn-primary:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 0 rgb(17 17 17);
+}
+:root[data-theme='neo'] .btn-primary:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 0 rgb(17 17 17);
+}
+:root[data-theme='neo'] .field-input {
+  border: 2px solid rgb(17 17 17);
+}
+:root[data-theme='neo'] .field-input:focus {
+  box-shadow: 4px 4px 0 0 rgb(78 205 196 / 0.9);
+}
+/* Neo 标题区轻微倾斜装饰（仅装饰性徽标，3° 以内） */
+:root[data-theme='neo'] .holo-text {
+  display: inline-block;
+  transform: rotate(-1.5deg);
 }

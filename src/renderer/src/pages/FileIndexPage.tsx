@@ -1,6 +1,8 @@
 /**
- * File Index 文件索引：手动添加/选择文件、路径有效性检查、打开文件/目录、
- * 复制路径、搜索、类型筛选。只读记录，不移动/删除用户文件。
+ * File Index 文件索引（MyDesk 2.0）：桌面文件管理器式紧凑排版。
+ * 页面头部（数量/大小/失效状态 + 主要操作）→ 轻量工具栏（搜索/类型/分组/失效筛选/统计）→ 文件列表。
+ * 手动添加/批量添加/目录扫描（授权+预览+确认）/CSV 导入/失效清理/详情抽屉全部保留。
+ * 只读记录，不移动/删除用户文件。
  */
 import { useCallback, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -14,18 +16,31 @@ import {
   Copy,
   RefreshCw,
   FileWarning,
-  FolderOpen
+  FolderOpen,
+  MoreHorizontal,
+  Upload,
+  Download,
+  FolderTree,
+  EyeOff,
+  BarChart3,
+  Info
 } from 'lucide-react'
 import type { FileIndexItem, FileIndexStats } from '@shared/types'
 import { api, type FileFilterLike } from '../api/client'
 import { useApp } from '../store/AppStore'
-import { ProgressBar, 
+import {
   Button,
   Card,
+  Drawer,
   EmptyState,
   Field,
+  IconButton,
   Input,
   Modal,
+  PageHeader,
+  PageToolbar,
+  ProgressBar,
+  SectionHeading,
   Select,
   SkeletonList,
   Tag,
@@ -62,6 +77,8 @@ export function FileIndexPage() {
   const [scanning, setScanning] = useState(false)
   const [scanResult, setScanResult] = useState<Array<{ path: string; name: string; fileType: string; size: number }>>([])
   const [scanCancelled, setScanCancelled] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [detailFor, setDetailFor] = useState<FileIndexItem | null>(null)
 
   const load = useCallback(async () => {
     const filter: FileFilterLike = { search, fileType }
@@ -96,6 +113,7 @@ export function FileIndexPage() {
   }
 
   const batchAdd = async () => {
+    setMoreOpen(false)
     try {
       const picked = await api.dialog.pickFiles()
       if (!picked || picked.length === 0) return
@@ -202,6 +220,7 @@ export function FileIndexPage() {
   }
 
   const importCsv = async () => {
+    setMoreOpen(false)
     try {
       const target = await api.dialog.openFile()
       if (!target) return
@@ -214,6 +233,7 @@ export function FileIndexPage() {
   }
 
   const cleanupInvalid = async () => {
+    setMoreOpen(false)
     try {
       const res = await api.filesV3.cleanupInvalid()
       if (res.invalid.length === 0) {
@@ -250,6 +270,11 @@ export function FileIndexPage() {
     try {
       await api.files.remove(item.id)
       toast('success', '已从索引移除（未触碰文件本身）')
+      setSelected((prev) => {
+        const n = new Set(prev)
+        n.delete(item.id)
+        return n
+      })
       await load()
     } catch (err) {
       toast('error', err instanceof Error ? err.message : '移除失败')
@@ -272,76 +297,114 @@ export function FileIndexPage() {
     return [...map.entries()]
   })()
 
+  const rows = ((groupByDir && grouped
+    ? grouped.flatMap(([dir, list]) => list.map((f, idx) => ({ f, dir: idx === 0 ? dir : null })))
+    : (visible ?? []).map((f) => ({ f, dir: null }))
+  ).filter(({ f }) => !onlyInvalid || f.isInvalid))
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="mr-auto text-xl font-bold text-text">文件索引</h1>
-        {(visible?.length ?? 0) > 0 && (
-          <span className="text-xs text-text-3">
-            共 {visible!.length} 条 · 总大小 {formatSize(totalSize)}
-            {invalidCount > 0 && <span className="ml-2 text-danger">{invalidCount} 条失效</span>}
-          </span>
-        )}
-        <Button className="text-xs" onClick={() => setGroupByDir((v) => !v)}>
-          {groupByDir ? '按目录分组：开' : '按目录分组：关'}
-        </Button>
-        <Tag active={onlyInvalid} onClick={() => setOnlyInvalid((v) => !v)}>
-          仅看失效
-        </Tag>
-        <div className="relative">
+      <PageHeader
+        title="文件索引"
+        description={
+          (visible?.length ?? 0) > 0
+            ? `共 ${visible!.length} 条 · 总大小 ${formatSize(totalSize)}${
+                invalidCount > 0 ? ` · ${invalidCount} 条失效` : ' · 路径全部有效'
+              }`
+            : '记录重要文件的位置，随时查找与核验。'
+        }
+        actions={
+          <>
+            <div className="relative">
+              <Button onClick={() => setMoreOpen((v) => !v)}>
+                <MoreHorizontal size={15} /> 更多操作
+              </Button>
+              <AnimatePresence>
+                {moreOpen && (
+                  <>
+                    {/* 点击外部关闭 */}
+                    <div className="fixed inset-0 z-30" onMouseDown={() => setMoreOpen(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 4 }}
+                      transition={{ duration: 0.15 }}
+                      className="glass-card absolute right-0 top-11 z-40 w-44 rounded-xl border border-border p-1.5 shadow-lifted"
+                    >
+                      <MenuBtn icon={<Plus size={14} />} label="批量添加文件" onClick={() => { setMoreOpen(false); void batchAdd() }} />
+                      <MenuBtn icon={<Upload size={14} />} label="导入 CSV" onClick={() => void importCsv()} />
+                      <MenuBtn icon={<Trash2 size={14} />} label="失效清理建议" onClick={() => void cleanupInvalid()} />
+                      <MenuBtn
+                        icon={<RefreshCw size={14} />}
+                        label="批量检查路径"
+                        onClick={() => {
+                          setMoreOpen(false)
+                          void batchCheckAll()
+                        }}
+                      />
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+            <Button
+              onClick={() => {
+                setScanOpen(true)
+                setScanResult([])
+              }}
+            >
+              <FolderTree size={15} /> 目录扫描
+            </Button>
+            <Button variant="primary" onClick={() => void addByPath()}>
+              <Plus size={16} /> 索引文件
+            </Button>
+          </>
+        }
+      />
+
+      <PageToolbar>
+        <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-3" />
-          <Input value={search} onChange={setSearch} placeholder="搜索名称 / 路径…" className="!w-56 !pl-8" />
+          <Input value={search} onChange={setSearch} placeholder="搜索名称 / 路径…" className="!py-1.5 !pl-8" />
         </div>
+        <div className="flex-1" />
         <Select
           value={fileType}
           onChange={setFileType}
           options={[{ value: 'all', label: '全部类型' }, ...allTypes.map((t) => ({ value: t, label: t.toUpperCase() }))]}
+          className="!py-1.5"
         />
-        <Button onClick={() => void batchAdd()}>
-          <Plus size={16} /> 批量添加
-        </Button>
-        <Button className="text-xs" onClick={() => void importCsv()}>
-          导入 CSV
-        </Button>
-        <Button
-          className="text-xs"
-          onClick={() => {
-            setScanOpen(true)
-            setScanResult([])
-          }}
-        >
-          目录扫描
-        </Button>
-        <Button className="text-xs" onClick={() => setShowStats((v) => !v)}>
-          统计
-        </Button>
-        <Tag active={false} className="!cursor-pointer" onClick={() => void cleanupInvalid()}>
-          失效清理建议
-        </Tag>
-        <Button variant="primary" onClick={() => void addByPath()}>
-          <Plus size={16} /> 索引文件
-        </Button>
-      </div>
+        <IconButton title="按目录分组" active={groupByDir} onClick={() => setGroupByDir((v) => !v)}>
+          <FolderTree size={15} />
+        </IconButton>
+        <IconButton title="仅看失效" active={onlyInvalid} onClick={() => setOnlyInvalid((v) => !v)}>
+          <EyeOff size={15} />
+        </IconButton>
+        <IconButton title="统计" active={showStats} onClick={() => setShowStats((v) => !v)}>
+          <BarChart3 size={15} />
+        </IconButton>
+      </PageToolbar>
 
-      {items === null ? (
-        <SkeletonList rows={4} />
-      ) : items.length === 0 ? (
-        <EmptyState
-          icon={<FolderOpen size={36} />}
-          title="还没有索引任何文件"
-          hint="记录重要文件的位置，以后随时查找和核验。MyDesk 只读取文件元信息——绝不会移动或删除你的文件。"
-          action={
-            <Button variant="primary" onClick={() => void addByPath()}>
-              <Plus size={16} /> 索引第一个文件
-            </Button>
-          }
-        />
-      ) : (
-        <div className="flex flex-col gap-2.5">
-          {/* 统计面板 */}
-          {showStats && stats && (
-            <Card className="p-4">
-              <div className="mb-3 flex flex-wrap gap-4 text-xs text-text-2">
+      {/* 统计面板 */}
+      <AnimatePresence initial={false}>
+        {showStats && stats && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="overflow-hidden"
+          >
+            <Card className="p-5">
+              <SectionHeading
+                title="索引统计"
+                extra={
+                  <Button variant="ghost" size="sm" onClick={() => setShowStats(false)}>
+                    收起
+                  </Button>
+                }
+              />
+              <div className="mb-3 mt-2 flex flex-wrap gap-4 text-xs text-text-2">
                 <span>共 <b className="text-text">{stats.total}</b> 条</span>
                 <span>总大小 <b className="text-text">{formatSize(stats.totalSize)}</b></span>
                 <span>失效 <b className="text-danger">{stats.invalidCount}</b> 条</span>
@@ -352,78 +415,81 @@ export function FileIndexPage() {
                 {stats.byType.slice(0, 8).map((t) => (
                   <div key={t.fileType} className="flex items-center gap-2 text-xs">
                     <span className="w-14 font-mono uppercase text-text-2">{t.fileType}</span>
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-3">
-                      <div className="h-full bg-success" style={{ width: (t.count / Math.max(stats.total, 1)) * 100 + '%' }} />
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-3">
+                      <div className="h-full rounded-full bg-primary/70" style={{ width: (t.count / Math.max(stats.total, 1)) * 100 + '%' }} />
                     </div>
-                    <span className="w-8 text-right font-mono">{t.count}</span>
+                    <span className="w-8 text-right font-mono tabular-nums">{t.count}</span>
                     <span className="w-20 text-right text-text-3">{formatSize(t.size)}</span>
                   </div>
                 ))}
               </div>
             </Card>
-          )}
-          {/* 批量检查进度 */}
-          {batchProgress && (
-            <Card className="flex items-center gap-3 px-4 py-3">
-              <span className="text-xs text-text-2">
-                正在检查路径… {batchProgress.done}/{batchProgress.total}（失效 {batchProgress.invalid}）
-              </span>
-              <ProgressBar
-                className="flex-1"
-                value={(batchProgress.done / Math.max(1, batchProgress.total)) * 100}
-              />
-            </Card>
-          )}
-          {/* 批量工具条 */}
-          {selected.size > 0 && (
-            <Card className="flex flex-wrap items-center gap-2 border-primary/40 px-4 py-2.5">
-              <span className="text-sm font-medium text-text">已选 {selected.size} 项</span>
-              <Button className="text-xs" onClick={() => setSelected(new Set(visible!.map((f) => f.id)))}>
-                全选当前列表
-              </Button>
-              <Button className="text-xs" onClick={() => void exportSelected()}>
-                导出选中
-              </Button>
-              <Button variant="ghost" className="text-xs" onClick={() => setSelected(new Set())}>
-                取消选择
-              </Button>
-            </Card>
-          )}
-          <AnimatePresence initial={false}>
-            {((groupByDir && grouped
-              ? grouped.flatMap(([dir, list]) => list.map((f, idx) => ({ f, dir: idx === 0 ? dir : null })))
-              : (visible ?? []).map((f) => ({ f, dir: null }))
-            )
-              .filter(({ f }) => !onlyInvalid || f.isInvalid)
-              .slice(0, renderLimit)
-              .map(({ f, dir }) => (
-                <div key={f.id}>
-                  {dir && (
-                    <p className="mb-1.5 mt-2 truncate font-mono text-[11px] text-text-3" title={dir}>
-                      📁 {dir}
-                    </p>
-                  )}
-                  <FileRow
-                    f={f}
-                    selected={selected.has(f.id)}
-                    onToggle={() => toggleSelect(f.id)}
-                    onCheck={() => void checkItem(f)}
-                    onEdit={() => {
-                      setEditing(f)
-                      setEditorOpen(true)
-                    }}
-                    onRemoved={() => {
-                      setSelected((prev) => {
-                        const n = new Set(prev)
-                        n.delete(f.id)
-                        return n
-                      })
-                    }}
-                  />
-                </div>
-              )))}
-          </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 批量检查进度 */}
+      {batchProgress && (
+        <Card className="flex items-center gap-3 px-4 py-3">
+          <span className="shrink-0 text-xs text-text-2">
+            正在检查路径… {batchProgress.done}/{batchProgress.total}（失效 {batchProgress.invalid}）
+          </span>
+          <ProgressBar
+            className="flex-1"
+            value={(batchProgress.done / Math.max(1, batchProgress.total)) * 100}
+          />
+        </Card>
+      )}
+
+      {/* 批量工具条（选中后出现） */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/40 bg-primary-soft/50 px-4 py-2.5">
+          <span className="text-sm font-medium text-text">已选 {selected.size} 项</span>
+          <Button size="sm" onClick={() => setSelected(new Set(visible!.map((f) => f.id)))}>全选当前列表</Button>
+          <Button size="sm" onClick={() => void exportSelected()}>导出选中</Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>取消选择</Button>
         </div>
+      )}
+
+      {items === null ? (
+        <SkeletonList rows={4} />
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={<FolderOpen size={36} />}
+          title="还没有索引任何文件"
+          hint="记录重要文件的位置，以后随时查找和核验。MyDesk 只读取文件元信息——绝不会移动或删除你的文件。也可以用「目录扫描」批量导入一个目录下的文件。"
+          action={
+            <Button variant="primary" onClick={() => void addByPath()}>
+              <Plus size={16} /> 索引第一个文件
+            </Button>
+          }
+        />
+      ) : (
+        <Card variant="outlined" className="overflow-hidden">
+          <AnimatePresence initial={false}>
+            {rows.slice(0, renderLimit).map(({ f, dir }) => (
+              <div key={f.id}>
+                {dir && (
+                  <p className="truncate border-b border-border bg-surface-2/60 px-4 py-1.5 font-mono text-[11px] text-text-3" title={dir}>
+                    📁 {dir}
+                  </p>
+                )}
+                <FileRow
+                  f={f}
+                  selected={selected.has(f.id)}
+                  onToggle={() => toggleSelect(f.id)}
+                  onCheck={() => void checkItem(f)}
+                  onEdit={() => {
+                    setEditing(f)
+                    setEditorOpen(true)
+                  }}
+                  onDetail={() => setDetailFor(f)}
+                  onRemoved={() => void removeItem(f)}
+                />
+              </div>
+            ))}
+          </AnimatePresence>
+        </Card>
       )}
 
       {items !== null && items.length > renderLimit && (
@@ -485,12 +551,111 @@ export function FileIndexPage() {
             {scanResult.map((f) => (
               <div key={f.path} className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5 text-xs last:border-0">
                 <span className="min-w-0 flex-1 truncate text-text">{f.name}</span>
-                <span className="shrink-0 font-mono text-text-3">{formatSize(f.size)}</span>
+                <span className="shrink-0 font-mono tabular-nums text-text-3">{formatSize(f.size)}</span>
               </div>
             ))}
           </div>
         )}
       </Modal>
+
+      {/* 文件详情抽屉 */}
+      <Drawer open={detailFor !== null} onClose={() => setDetailFor(null)} title="文件详情">
+        {detailFor && (
+          <div className="flex flex-col gap-4 text-sm">
+            <div>
+              <p className="font-medium text-text">{detailFor.name}</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <Tag variant="neutral">{detailFor.fileType.toUpperCase()}</Tag>
+                <Tag variant="neutral">{formatSize(detailFor.size)}</Tag>
+                {detailFor.version && <Tag>v{detailFor.version}</Tag>}
+                {detailFor.isInvalid && <Tag variant="danger">已失效</Tag>}
+              </div>
+            </div>
+            <div className="rounded-xl bg-surface-2 px-3.5 py-3">
+              <p className="mb-1 text-[11px] font-medium text-text-3">完整路径（点击复制）</p>
+              <button
+                className="break-all text-left font-mono text-xs leading-5 text-text-2 transition-colors hover:text-text"
+                onClick={async () => {
+                  await api.files.copyPath(detailFor.id)
+                  toast('success', '路径已复制')
+                }}
+                title="复制路径"
+              >
+                {detailFor.path}
+              </button>
+            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+              <div>
+                <dt className="text-text-3">索引时间</dt>
+                <dd className="mt-0.5 font-mono tabular-nums text-text-2">{detailFor.createdAt.slice(0, 10)}</dd>
+              </div>
+              <div>
+                <dt className="text-text-3">上次检查</dt>
+                <dd className="mt-0.5 font-mono tabular-nums text-text-2">
+                  {detailFor.lastCheckedAt ? detailFor.lastCheckedAt.slice(0, 10) : '从未检查'}
+                </dd>
+              </div>
+              {detailFor.notes && (
+                <div className="col-span-2">
+                  <dt className="text-text-3">备注</dt>
+                  <dd className="mt-0.5 leading-5 text-text-2">{detailFor.notes}</dd>
+                </div>
+              )}
+              {detailFor.tags.length > 0 && (
+                <div className="col-span-2">
+                  <dt className="text-text-3">标签</dt>
+                  <dd className="mt-1 flex flex-wrap gap-1">
+                    {detailFor.tags.map((t) => (
+                      <Tag key={t}>{t}</Tag>
+                    ))}
+                  </dd>
+                </div>
+              )}
+            </dl>
+            <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await api.files.open(detailFor.id)
+                  } catch (err) {
+                    toast('error', err instanceof Error ? err.message : '打开失败')
+                  }
+                }}
+              >
+                <ExternalLink size={14} /> 打开文件
+              </Button>
+              <Button size="sm" onClick={() => void api.files.openDir(detailFor.id)}>
+                <FolderSearch size={14} /> 打开所在目录
+              </Button>
+              <Button
+                size="sm"
+                onClick={async () => {
+                  await api.files.copyPath(detailFor.id)
+                  toast('success', '路径已复制')
+                }}
+              >
+                <Copy size={14} /> 复制路径
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditing(detailFor)
+                  setDetailFor(null)
+                  setEditorOpen(true)
+                }}
+              >
+                <Pencil size={14} /> 编辑
+              </Button>
+            </div>
+            <p className="flex items-start gap-1.5 text-[11px] leading-4 text-text-3">
+              <Info size={12} className="mt-0.5 shrink-0" />
+              MyDesk 只记录路径与元信息，不会移动、修改或删除磁盘上的文件。
+            </p>
+          </div>
+        )}
+      </Drawer>
 
       <FileEditorModal
         open={editorOpen}
@@ -505,26 +670,22 @@ export function FileIndexPage() {
   )
 }
 
-function IconBtn({
-  children,
-  onClick,
-  title,
-  danger = false
+function MenuBtn({
+  icon,
+  label,
+  onClick
 }: {
-  children: React.ReactNode
+  icon: React.ReactNode
+  label: string
   onClick: () => void
-  title: string
-  danger?: boolean
 }) {
   return (
     <button
-      title={title}
       onClick={onClick}
-      className={`rounded-lg p-1.5 transition-colors ${
-        danger ? 'text-text-3 hover:bg-danger/10 hover:text-danger' : 'text-text-3 hover:bg-surface-3 hover:text-text'
-      }`}
+      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-text-2 transition-colors hover:bg-surface-2 hover:text-text"
     >
-      {children}
+      {icon}
+      {label}
     </button>
   )
 }
@@ -618,7 +779,7 @@ function FileEditorModal({
   )
 }
 
-// ---------- 单条文件记录（含复选框） ----------
+// ---------- 单条文件记录（紧凑行 + 复选框） ----------
 
 function FileRow({
   f,
@@ -626,6 +787,7 @@ function FileRow({
   onToggle,
   onCheck,
   onEdit,
+  onDetail,
   onRemoved
 }: {
   f: FileIndexItem
@@ -633,104 +795,113 @@ function FileRow({
   onToggle: () => void
   onCheck: () => void
   onEdit: () => void
+  onDetail: () => void
   onRemoved: () => void
 }) {
-  const { toast, jumpTarget } = useApp()
-  const load = async (): Promise<void> => {
-    onRemoved()
-  }
-  void jumpTarget
+  const { toast } = useApp()
   return (
-    <motion.div layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-      <Card
-        hover
-        className={`group flex items-center gap-3 px-4 py-3 ${f.isInvalid ? 'border-danger/40' : ''} ${
-          selected ? 'border-primary ring-2 ring-primary/30' : ''
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      className={`group flex items-center gap-3 border-b border-border/60 px-4 py-2.5 transition-colors last:border-0 hover:bg-surface-2/70 ${
+        f.isInvalid ? 'bg-danger/5' : ''
+      } ${selected ? 'bg-primary-soft/40' : ''}`}
+    >
+      <button
+        onClick={onToggle}
+        title={selected ? '取消选择' : '加入选择'}
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 text-xs transition-all ${
+          selected ? 'border-primary bg-primary text-on-primary' : 'border-border-strong hover:border-primary'
         }`}
       >
-        <button
-          onClick={onToggle}
-          title={selected ? '取消选择' : '加入选择'}
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 text-xs transition-all ${
-            selected ? 'border-primary bg-primary text-on-primary' : 'border-border-strong hover:border-primary'
-          }`}
+        {selected && '✓'}
+      </button>
+      <div
+        className={`flex h-8 w-9 shrink-0 items-center justify-center rounded-lg text-[10px] font-bold uppercase ${
+          f.isInvalid ? 'bg-danger/10 text-danger' : 'bg-primary-soft text-primary'
+        }`}
+      >
+        {f.fileType ? f.fileType.slice(0, 4) : '文件'}
+      </div>
+      {/* 文件名是最主要信息；点击行打开详情 */}
+      <button onClick={onDetail} className="min-w-0 flex-1 text-left" title="查看详情">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium text-text group-hover:text-primary">{f.name}</span>
+          {f.isInvalid && (
+            <Tag variant="danger">
+              <FileWarning size={10} /> 已失效
+            </Tag>
+          )}
+          {f.version && <Tag variant="neutral">v{f.version}</Tag>}
+        </div>
+        <p className="truncate font-mono text-xs text-text-3">{f.path}</p>
+        <p className="text-[10px] tabular-nums text-text-3">
+          {formatSize(f.size)}
+          {f.lastCheckedAt ? ` · 检查于 ${f.lastCheckedAt.slice(0, 10)}` : ' · 从未检查'}
+          {f.notes ? ` · ${f.notes}` : ''}
+        </p>
+      </button>
+      <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <IconBtn title="检查路径" onClick={onCheck}>
+          <RefreshCw size={14} />
+        </IconBtn>
+        <IconBtn
+          title="打开文件"
+          onClick={async () => {
+            try {
+              await api.files.open(f.id)
+            } catch (err) {
+              toast('error', err instanceof Error ? err.message : '打开失败')
+            }
+          }}
         >
-          {selected && '✓'}
-        </button>
-        <div
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[10px] font-bold uppercase ${
-            f.isInvalid ? 'bg-danger/10 text-danger' : 'bg-primary-soft text-primary'
-          }`}
+          <ExternalLink size={14} />
+        </IconBtn>
+        <IconBtn title="打开所在目录" onClick={() => void api.files.openDir(f.id)}>
+          <FolderSearch size={14} />
+        </IconBtn>
+        <IconBtn
+          title="复制路径"
+          onClick={async () => {
+            await api.files.copyPath(f.id)
+            toast('success', '路径已复制')
+          }}
         >
-          {f.fileType ? f.fileType.slice(0, 4) : '文件'}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-text">{f.name}</span>
-            {f.isInvalid && (
-              <Tag className="!bg-danger/10 !text-danger">
-                <FileWarning size={10} className="mr-1" /> 已失效
-              </Tag>
-            )}
-            {f.version && <Tag>v{f.version}</Tag>}
-          </div>
-          <p className="truncate font-mono text-xs text-text-3">{f.path}</p>
-          <p className="text-[10px] text-text-3">
-            {f.fileType.toUpperCase() || 'FILE'} · {formatSize(f.size)}
-            {f.lastCheckedAt ? ` · 检查于 ${f.lastCheckedAt.slice(0, 10)}` : ' · 从未检查'}
-            {f.notes ? ` · ${f.notes}` : ''}
-          </p>
-        </div>
-        <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          <IconBtn title="检查路径" onClick={onCheck}>
-            <RefreshCw size={14} />
-          </IconBtn>
-          <IconBtn
-            title="打开文件"
-            onClick={async () => {
-              try {
-                await api.files.open(f.id)
-              } catch (err) {
-                toast('error', err instanceof Error ? err.message : '打开失败')
-                await load()
-              }
-            }}
-          >
-            <ExternalLink size={14} />
-          </IconBtn>
-          <IconBtn title="打开所在目录" onClick={() => void api.files.openDir(f.id)}>
-            <FolderSearch size={14} />
-          </IconBtn>
-          <IconBtn
-            title="复制路径"
-            onClick={async () => {
-              await api.files.copyPath(f.id)
-              toast('success', '路径已复制')
-            }}
-          >
-            <Copy size={14} />
-          </IconBtn>
-          <IconBtn title="编辑" onClick={onEdit}>
-            <Pencil size={14} />
-          </IconBtn>
-          <IconBtn
-            title="从索引移除"
-            danger
-            onClick={async () => {
-              try {
-                await api.files.remove(f.id)
-                toast('success', '已从索引移除（未触碰文件本身）')
-                onRemoved()
-                await (load as unknown as () => Promise<void>)()
-              } catch (err) {
-                toast('error', err instanceof Error ? err.message : '移除失败')
-              }
-            }}
-          >
-            <Trash2 size={14} />
-          </IconBtn>
-        </div>
-      </Card>
+          <Copy size={14} />
+        </IconBtn>
+        <IconBtn title="编辑" onClick={onEdit}>
+          <Pencil size={14} />
+        </IconBtn>
+        <IconBtn title="从索引移除" danger onClick={onRemoved}>
+          <Trash2 size={14} />
+        </IconBtn>
+      </div>
     </motion.div>
+  )
+}
+
+function IconBtn({
+  children,
+  onClick,
+  title,
+  danger = false
+}: {
+  children: React.ReactNode
+  onClick: () => void
+  title: string
+  danger?: boolean
+}) {
+  return (
+    <button
+      title={title}
+      onClick={onClick}
+      className={`rounded-lg p-1.5 transition-colors ${
+        danger ? 'text-text-3 hover:bg-danger/10 hover:text-danger' : 'text-text-3 hover:bg-surface-3 hover:text-text'
+      }`}
+    >
+      {children}
+    </button>
   )
 }

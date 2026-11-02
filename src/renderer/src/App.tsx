@@ -35,18 +35,18 @@ function Shell() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden">
-      <Sidebar />
+      <Sidebar onQuickAdd={() => setQuickAdd(true)} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar onQuickAdd={() => setQuickAdd(true)} />
+        <Topbar />
         <main className="min-h-0 flex-1 overflow-y-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={page}
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.18, ease: 'easeOut' }}
-              className="mx-auto max-w-6xl px-6 py-6"
+              className="min-h-full px-6 py-6 lg:px-8"
             >
               <Page />
             </motion.div>

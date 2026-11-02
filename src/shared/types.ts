@@ -19,7 +19,16 @@ export const PRIORITIES: Priority[] = ['low', 'medium', 'high']
  * 主题标识。新增主题：在此联合中加入 id + 在 src/shared/themes.ts 注册表
  * 与 theme.css 中各加一组变量（编译期会因注册表 satisfies 校验而提醒）。
  */
-export type ThemeName = 'holographic' | 'mint' | 'lavender' | 'cream' | 'midnight' | 'glass'
+export type ThemeName =
+  | 'claude'
+  | 'holographic'
+  | 'acid'
+  | 'neo'
+  | 'mint'
+  | 'lavender'
+  | 'cream'
+  | 'midnight'
+  | 'glass'
 
 export const THEMES: ThemeName[] = ['mint', 'lavender', 'cream', 'midnight', 'glass']
 
@@ -54,7 +63,17 @@ export interface AppSettings {
   defaultReminderMinutes: number | null
   /** 浏览器扩展本地服务（V3） */
   extensionEnabled: boolean
+  /** 全局界面字体（与主题独立） */
+  fontFamily: FontFamilyId
+  /** 标题字体策略：theme 跟随主题默认 / serif 衬线标题 / follow 标题跟随正文字体 */
+  headingFont: HeadingFontPref
 }
+
+/** 全局字体选项 id（详见 src/renderer/src/theme/fonts.css 与设置页字体区） */
+export type FontFamilyId = 'system' | 'source-han' | 'sarasa' | 'lxgw'
+
+/** 标题字体策略（MyDesk 2.0）：衬线标题用于暖编辑式排版 */
+export type HeadingFontPref = 'theme' | 'serif' | 'follow'
 
 export type PageId =
   | 'dashboard'

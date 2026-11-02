@@ -26,6 +26,8 @@ interface AppState {
   settings: AppSettings | null
   page: PageId
   setPage: (p: PageId) => void
+  /** 最近访问的页面（不含当前页，最多 3 个，localStorage 持久化） */
+  recentPages: PageId[]
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>
   toast: (kind: Toast['kind'], message: string) => void
   toasts: Toast[]
@@ -44,12 +46,43 @@ export function useApp(): AppState {
 
 let toastSeq = 1
 
+const RECENT_PAGES_KEY = 'mydesk-recent-pages'
+
+function loadRecentPages(): PageId[] {
+  try {
+    const raw = localStorage.getItem(RECENT_PAGES_KEY)
+    const parsed = raw ? (JSON.parse(raw) as unknown) : []
+    return Array.isArray(parsed) ? parsed.filter((x): x is PageId => typeof x === 'string').slice(0, 3) : []
+  } catch {
+    return []
+  }
+}
+
+function saveRecentPages(list: PageId[]): void {
+  try {
+    localStorage.setItem(RECENT_PAGES_KEY, JSON.stringify(list.slice(0, 3)))
+  } catch {
+    /* ignore */
+  }
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [page, setPage] = useState<PageId>('dashboard')
+  const [page, setPageState] = useState<PageId>('dashboard')
+  const [recentPages, setRecentPages] = useState<PageId[]>(loadRecentPages)
   const [toasts, setToasts] = useState<Toast[]>([])
   const [jumpTarget, setJumpTarget] = useState<{ page: PageId; ts: number } | null>(null)
   const startPageApplied = useRef(false)
+
+  // 切页时记录最近访问（去重、最新在前、最多 3 条）
+  const setPage = useCallback((p: PageId) => {
+    setPageState(p)
+    setRecentPages((prev) => {
+      const next = [p, ...prev.filter((x) => x !== p)].slice(0, 3)
+      saveRecentPages(next)
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     void api.settings.get().then((s) => {
@@ -59,12 +92,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setPage(s.startPage)
       }
     })
-  }, [])
+  }, [setPage])
 
-  // 主题与动画偏好同步到 <html data-theme / data-animation>
+  // 主题、字体与动画偏好同步到 <html data-theme / data-font / data-heading / data-animation>
   useEffect(() => {
     if (!settings) return
     document.documentElement.dataset.theme = settings.theme
+    document.documentElement.dataset.font = settings.fontFamily
+    document.documentElement.dataset.heading = settings.headingFont
     document.documentElement.dataset.animation = settings.animation
   }, [settings])
 
@@ -82,11 +117,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const jumpTo = useCallback((p: PageId) => {
     setPage(p)
     setJumpTarget({ page: p, ts: Date.now() })
-  }, [])
+  }, [setPage])
 
   const value = useMemo(
-    () => ({ settings, page, setPage, patchSettings, toast, toasts, jumpTarget, jumpTo }),
-    [settings, page, patchSettings, toast, toasts, jumpTarget, jumpTo]
+    () => ({ settings, page, setPage, recentPages, patchSettings, toast, toasts, jumpTarget, jumpTo }),
+    [settings, page, setPage, recentPages, patchSettings, toast, toasts, jumpTarget, jumpTo]
   )
 
   return (

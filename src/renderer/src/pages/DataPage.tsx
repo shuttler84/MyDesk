@@ -8,7 +8,7 @@ import { ShieldCheck, History, HardDriveDownload, Info } from 'lucide-react'
 import type { AppInfo, BackupHistoryItem, DatabaseIntegrityReport } from '@shared/types'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
-import { Button, Card } from '../components/ui'
+import { Button, Card, PageHeader, SectionHeading } from '../components/ui'
 import { BackupCenterCards } from '../components/BackupCenterCards'
 
 export function DataPage() {
@@ -42,15 +42,15 @@ export function DataPage() {
   }, [])
 
   return (
-    <div className="flex flex-col gap-5">
-      <h1 className="text-xl font-bold text-text">数据管理</h1>
+    <div className="mx-auto flex max-w-5xl flex-col gap-5">
+      <PageHeader title="数据管理" description="备份、恢复、导出与数据库完整性 —— 你的数据永远由你掌控。" />
 
       {/* 数据库状态 */}
       <Card className="p-5">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text">
-          <ShieldCheck size={15} className={integrity?.integrity === 'ok' ? 'text-success' : 'text-danger'} />
-          数据库完整性
-        </h3>
+        <SectionHeading
+          title="数据库完整性"
+          extra={<ShieldCheck size={15} className={integrity?.integrity === 'ok' ? 'text-success' : 'text-danger'} />}
+        />
         {integrity === null ? (
           <p className="text-xs text-text-3">检查中…</p>
         ) : (
@@ -101,7 +101,7 @@ export function DataPage() {
 
       {/* 导出 */}
       <Card className="p-5">
-        <h3 className="mb-1 text-sm font-semibold text-text">导出数据</h3>
+        <SectionHeading title="导出数据" className="mb-1" />
         <p className="mb-3 text-xs text-text-3">
           普通导出绝不包含保险箱内容。保险箱数据只能通过加密的 .mydeskpack 备份离开本机。
         </p>
@@ -116,9 +116,11 @@ export function DataPage() {
 
       {/* 跨设备迁移指引 */}
       <Card className="p-5">
-        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-text">
-          <HardDriveDownload size={15} className="text-accent" /> 跨设备迁移
-        </h3>
+        <SectionHeading
+          title="跨设备迁移"
+          extra={<HardDriveDownload size={15} className="text-accent" />}
+          className="mb-2"
+        />
         <ol className="ml-4 list-decimal space-y-1 text-xs leading-6 text-text-2">
           <li>在旧设备：数据管理 → 导出备份，生成 .mydeskpack 文件（保险箱数据保持加密）。</li>
           <li>将备份文件复制到新设备（U 盘 / 网盘均可）。</li>
